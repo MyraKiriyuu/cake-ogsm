@@ -1,0 +1,277 @@
+name: Sync HubSpot to Supabase
+
+on:
+  schedule:
+    - cron: '0 1 * * *'  # Runs every day at 1am UTC (8am Jakarta time)
+  workflow_dispatch:       # Also allows manual trigger from GitHub Actions tab
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Sync HubSpot deals to Supabase
+        env:
+          HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          node << 'EOF'
+          const https = require('https');
+
+          // ─── Currency conversion ──────────────────────────────────
+          const RATES = { USD: 1, NTD: 1/32, TWD: 1/32, IDR: 1/16000 };
+          function toUSD(amount, currency) {
+            const rate = RATES[(currency || 'USD').toUpperCase()] ?? 1;
+            return Math.round(amount * rate * 100) / 100;
+          }
+
+          // ─── HTTP helpers ─────────────────────────────────────────
+          function request(options, body) {
+            return new Promise((resolve, reject) => {
+              const req = https.request(options, res => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                  try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+                  catch { resolve({ status: res.statusCode, body: data }); }
+                });
+              });
+              req.on('error', reject);
+              if (body) req.write(JSON.stringify(body));
+              req.end();
+            });
+          }
+
+          function hubspot(path, body) {
+            const isPost = !!body;
+            return request({
+              hostname: 'api.hubapi.com',
+              path,
+              method: isPost ? 'POST' : 'GET',
+              headers: {
+                'Authorization': `Bearer ${process.env.HUBSPOT_TOKEN}`,
+                'Content-Type': 'application/json'
+              }
+            }, body);
+          }
+
+          function supabase(path, body, method) {
+            const url = new URL(process.env.SUPABASE_URL);
+            return request({
+              hostname: url.hostname,
+              path: `/rest/v1/${path}`,
+              method: method || (body ? 'POST' : 'GET'),
+              headers: {
+                'apikey': process.env.SUPABASE_SERVICE_KEY,
+                'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+              }
+            }, body);
+          }
+
+          // ─── Fetch all deals from a pipeline/stage ────────────────
+          async function fetchDeals(pipelineLabel, stageLabel) {
+            console.log(`Fetching pipelines to find "${pipelineLabel}"...`);
+
+            // Get all pipelines to find the right ID
+            const pipelinesRes = await hubspot('/crm/v3/pipelines/deals');
+            const pipelines = pipelinesRes.body.results || [];
+            const pipeline = pipelines.find(p =>
+              p.label.toLowerCase().includes(pipelineLabel.toLowerCase())
+            );
+            if (!pipeline) {
+              console.log(`Pipeline "${pipelineLabel}" not found. Available: ${pipelines.map(p => p.label).join(', ')}`);
+              return [];
+            }
+            console.log(`Found pipeline: ${pipeline.label} (${pipeline.id})`);
+
+            // Find the stage
+            const stage = pipeline.stages.find(s =>
+              s.label.toLowerCase().includes(stageLabel.toLowerCase())
+            );
+            if (!stage) {
+              console.log(`Stage "${stageLabel}" not found. Available: ${pipeline.stages.map(s => s.label).join(', ')}`);
+              return [];
+            }
+            console.log(`Found stage: ${stage.label} (${stage.id})`);
+
+            // Search for deals in this stage
+            let deals = [];
+            let after = undefined;
+            do {
+              const body = {
+                filterGroups: [{
+                  filters: [
+                    { propertyName: 'pipeline',   operator: 'EQ', value: pipeline.id },
+                    { propertyName: 'dealstage',  operator: 'EQ', value: stage.id }
+                  ]
+                }],
+                properties: [
+                  'dealname', 'amount', 'dealstage', 'pipeline',
+                  'closedate', 'hs_deal_stage_probability',
+                  'deal_currency_code', 'hubspot_owner_id'
+                ],
+                limit: 100,
+                ...(after ? { after } : {})
+              };
+              const res = await hubspot('/crm/v3/objects/deals/search', body);
+              const results = res.body.results || [];
+              deals = deals.concat(results);
+              after = res.body.paging?.next?.after;
+              console.log(`  Fetched ${results.length} deals (total so far: ${deals.length})`);
+            } while (after);
+
+            return deals;
+          }
+
+          // ─── Fetch associated company name for a deal ─────────────
+          async function getCompanyName(dealId) {
+            try {
+              const assocRes = await hubspot(`/crm/v3/objects/deals/${dealId}/associations/companies`);
+              const companyId = assocRes.body.results?.[0]?.id;
+              if (!companyId) return null;
+              const compRes = await hubspot(`/crm/v3/objects/companies/${companyId}?properties=name`);
+              return compRes.body.properties?.name || null;
+            } catch { return null; }
+          }
+
+          // ─── Main sync ────────────────────────────────────────────
+          async function main() {
+            console.log('Starting HubSpot sync...');
+
+            // Fetch from both pipelines
+            const [closedDeals, paymentDeals] = await Promise.all([
+              fetchDeals('Team Indonesia', 'Closed'),
+              fetchDeals('Payment Received', 'Payment Received')
+            ]);
+
+            console.log(`Closed deals: ${closedDeals.length}`);
+            console.log(`Payment received deals: ${paymentDeals.length}`);
+
+            // Enrich deals with company names
+            console.log('Fetching company names...');
+            const enrichDeal = async (deal, source) => {
+              const company = await getCompanyName(deal.id);
+              const amount  = parseFloat(deal.properties.amount || 0);
+              const currency = deal.properties.deal_currency_code || 'USD';
+              const amountUSD = toUSD(amount, currency);
+              return {
+                deal_id:      deal.id,
+                deal_name:    deal.properties.dealname || '',
+                company_name: company || deal.properties.dealname || '',
+                amount_raw:   amount,
+                currency:     currency,
+                amount_usd:   amountUSD,
+                close_date:   deal.properties.closedate || null,
+                source:       source,  // 'contracted' or 'payment_received'
+                synced_at:    new Date().toISOString()
+              };
+            };
+
+            const contracted = await Promise.all(closedDeals.map(d => enrichDeal(d, 'contracted')));
+            const payments   = await Promise.all(paymentDeals.map(d => enrichDeal(d, 'payment_received')));
+            const allDeals   = [...contracted, ...payments];
+
+            console.log(`Total enriched deals: ${allDeals.length}`);
+
+            // Build summary stats
+            const now = new Date();
+            const currentQ = Math.floor(now.getMonth() / 3) + 1;
+            const currentY = now.getFullYear();
+
+            function getQuarter(dateStr) {
+              if (!dateStr) return null;
+              const d = new Date(dateStr);
+              return { q: Math.floor(d.getMonth() / 3) + 1, y: d.getFullYear() };
+            }
+
+            const contractedThisQ = contracted.filter(d => {
+              const q = getQuarter(d.close_date);
+              return q && q.q === currentQ && q.y === currentY;
+            });
+            const contractedLastQ = contracted.filter(d => {
+              const prevQ = currentQ === 1 ? 4 : currentQ - 1;
+              const prevY = currentQ === 1 ? currentY - 1 : currentY;
+              const q = getQuarter(d.close_date);
+              return q && q.q === prevQ && q.y === prevY;
+            });
+            const contractedLastY = contracted.filter(d => {
+              const q = getQuarter(d.close_date);
+              return q && q.q === currentQ && q.y === currentY - 1;
+            });
+            const paymentsThisQ = payments.filter(d => {
+              const q = getQuarter(d.close_date);
+              return q && q.q === currentQ && q.y === currentY;
+            });
+
+            const sum = arr => arr.reduce((s, d) => s + d.amount_usd, 0);
+
+            const totalContractedQ  = Math.round(sum(contractedThisQ) * 100) / 100;
+            const totalContractedLQ = Math.round(sum(contractedLastQ) * 100) / 100;
+            const totalContractedLY = Math.round(sum(contractedLastY) * 100) / 100;
+            const totalPaymentsQ    = Math.round(sum(paymentsThisQ) * 100) / 100;
+
+            const qoqGrowth = totalContractedLQ > 0
+              ? Math.round((totalContractedQ - totalContractedLQ) / totalContractedLQ * 1000) / 10
+              : null;
+            const yoyGrowth = totalContractedLY > 0
+              ? Math.round((totalContractedQ - totalContractedLY) / totalContractedLY * 1000) / 10
+              : null;
+
+            // Top clients this quarter
+            const topClients = contractedThisQ
+              .sort((a, b) => b.amount_usd - a.amount_usd)
+              .slice(0, 10)
+              .map(d => ({
+                name:       d.company_name || d.deal_name,
+                amount_usd: d.amount_usd,
+                deal_name:  d.deal_name,
+                close_date: d.close_date
+              }));
+
+            const summary = {
+              quarter:              `Q${currentQ} ${currentY}`,
+              total_contracted_usd: totalContractedQ,
+              total_payments_usd:   totalPaymentsQ,
+              deal_count:           contractedThisQ.length,
+              avg_deal_usd:         contractedThisQ.length > 0
+                                      ? Math.round(totalContractedQ / contractedThisQ.length * 100) / 100
+                                      : 0,
+              qoq_growth_pct:       qoqGrowth,
+              yoy_growth_pct:       yoyGrowth,
+              top_clients:          topClients,
+              synced_at:            new Date().toISOString()
+            };
+
+            console.log('Summary:', JSON.stringify(summary, null, 2));
+
+            // ─── Write to Supabase ──────────────────────────────────
+            // 1. Upsert all raw deals
+            if (allDeals.length > 0) {
+              console.log('Writing deals to Supabase...');
+              const dealsRes = await supabase(
+                'hubspot_deals?on_conflict=deal_id',
+                allDeals,
+                'POST'
+              );
+              console.log(`Deals upsert status: ${dealsRes.status}`);
+            }
+
+            // 2. Upsert summary
+            console.log('Writing summary to Supabase...');
+            const summaryRes = await supabase(
+              'hubspot_summary?on_conflict=quarter',
+              [summary],
+              'POST'
+            );
+            console.log(`Summary upsert status: ${summaryRes.status}`);
+            console.log('Sync complete!');
+          }
+
+          main().catch(err => {
+            console.error('Sync failed:', err);
+            process.exit(1);
+          });
+          EOF
