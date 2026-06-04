@@ -69,18 +69,21 @@ jobs:
             }, body);
           }
 
-          function supabase(path, body, method) {
+          function supabase(path, body, method, upsert) {
             const url = new URL(process.env.SUPABASE_URL);
+            const headers = {
+              'apikey': process.env.SUPABASE_SERVICE_KEY,
+              'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+              'Content-Type': 'application/json',
+              'Prefer': upsert
+                ? `resolution=merge-duplicates,return=minimal`
+                : 'return=minimal'
+            };
             return request({
               hostname: url.hostname,
               path: `/rest/v1/${path}`,
               method: method || (body ? 'POST' : 'GET'),
-              headers: {
-                'apikey': process.env.SUPABASE_SERVICE_KEY,
-                'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=minimal'
-              }
+              headers
             }, body);
           }
 
@@ -251,10 +254,9 @@ jobs:
               const q = getQuarter(d.close_date);
               return q && q.q === currentQ && q.y === currentY - 1;
             });
-            const paymentsThisQ = payments.filter(d => {
-              const q = getQuarter(d.close_date);
-              return q && q.q === currentQ && q.y === currentY;
-            });
+            // Payment received: include all quarters so we capture
+            // payments logged in any period
+            const paymentsThisQ = payments;
 
             const sum = arr => arr.reduce((s, d) => s + d.amount_usd, 0);
 
@@ -304,9 +306,11 @@ jobs:
               const dealsRes = await supabase(
                 'hubspot_deals?on_conflict=deal_id',
                 allDeals,
-                'POST'
+                'POST',
+                true
               );
               console.log(`Deals upsert status: ${dealsRes.status}`);
+              if (dealsRes.status >= 400) console.log('Deals error:', JSON.stringify(dealsRes.body));
             }
 
             // 2. Upsert summary
@@ -314,9 +318,11 @@ jobs:
             const summaryRes = await supabase(
               'hubspot_summary?on_conflict=quarter',
               [summary],
-              'POST'
+              'POST',
+              true
             );
             console.log(`Summary upsert status: ${summaryRes.status}`);
+            if (summaryRes.status >= 400) console.log('Summary error:', JSON.stringify(summaryRes.body));
             console.log('Sync complete!');
           }
 
