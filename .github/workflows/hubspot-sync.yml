@@ -141,10 +141,10 @@ jobs:
           async function main() {
             console.log('Starting HubSpot sync...');
 
-            // Fetch from both pipelines
+            // Fetch from both stages in Business Development pipeline
             const [closedDeals, paymentDeals] = await Promise.all([
-              fetchDeals('Team Indonesia', 'Closed'),
-              fetchDeals('Payment Received', 'Payment Received')
+              fetchDeals('Business Development', 'Closed'),
+              fetchDeals('Business Development', 'Payment Received')
             ]);
 
             console.log(`Closed deals: ${closedDeals.length}`);
