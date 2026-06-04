@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OGSM Platform · Cake Indonesia</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  const SUPABASE_URL = 'https://tpjsyehbbhqqvvxkrlou.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRwanN5ZWhiYmhxcXZ2eGtybG91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NTI4NDYsImV4cCI6MjA5NjEyODg0Nn0.7TOz7AvJxdK419gYZcFRcLyBY3Gk7bCdO6wsld_DyGU';
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -214,20 +218,14 @@ input, select, textarea { font-family: var(--font); }
 .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #111; color: #fff; padding: 10px 20px; border-radius: 99px; font-size: 13px; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 999; white-space: nowrap; border: 1px solid #2a2a28; }
 .toast.show { opacity: 1; }
 </style>
+</head>
+<body>
+
 <!-- =====================================================
   STEP 1: Paste your Supabase credentials here.
   Get them from: supabase.com → your project → Settings → API
   Leave as-is to run in demo mode (localStorage only).
 ====================================================== -->
-<script>
-  const SUPABASE_URL = 'https://tpjsyehbbhqqvvxkrlou.supabase.co';
-  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRwanN5ZWhiYmhxcXZ2eGtybG91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NTI4NDYsImV4cCI6MjA5NjEyODg0Nn0.7TOz7AvJxdK419gYZcFRcLyBY3Gk7bCdO6wsld_DyGU';
-</script>
-</head>
-<body>
-
-
-
 <div class="app" id="app">
 
   <!-- AUTH -->
