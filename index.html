@@ -300,9 +300,9 @@ input, select, textarea { font-family: var(--font); }
 <script>
 // ─── Supabase init ─────────────────────────────────────────────
 const CONFIGURED = SUPABASE_URL !== 'YOUR_SUPABASE_URL';
-let supabase = null;
+let _supabase = null;
 if (CONFIGURED) {
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   // Hide demo hint when real credentials are set
   document.getElementById('demoHint').style.display = 'none';
 }
@@ -341,8 +341,8 @@ function showToast(msg) {
 async function loadData() {
   if (CONFIGURED) {
     const [sr, er] = await Promise.all([
-      supabase.from('slides').select('*').order('position'),
-      supabase.from('entries').select('*').order('created_at', { ascending: false })
+      _supabase.from('slides').select('*').order('position'),
+      _supabase.from('entries').select('*').order('created_at', { ascending: false })
     ]);
     slides  = (sr.data || []).map(s => ({ ...s, fields: typeof s.fields === 'string' ? JSON.parse(s.fields) : s.fields }));
     entries = er.data || [];
@@ -355,20 +355,20 @@ async function loadData() {
 
 async function saveSlide(s) {
   if (CONFIGURED) {
-    await supabase.from('slides').upsert({ id: s.id, title: s.title, fields: s.fields, position: s.position ?? 0 });
+    await _supabase.from('slides').upsert({ id: s.id, title: s.title, fields: s.fields, position: s.position ?? 0 });
   } else {
     lsSet('ogsm_slides', slides);
   }
 }
 
 async function deleteSlideDB(id) {
-  if (CONFIGURED) await supabase.from('slides').delete().eq('id', id);
+  if (CONFIGURED) await _supabase.from('slides').delete().eq('id', id);
   else { lsSet('ogsm_slides', slides); lsSet('ogsm_entries', entries); }
 }
 
 async function saveEntry(entry) {
   if (CONFIGURED) {
-    await supabase.from('entries').insert({
+    await _supabase.from('entries').insert({
       slide_id: entry.slideId, slide_title: entry.slideTitle,
       data: entry.data, period: entry.period, note: entry.note, by: entry.by
     });
@@ -378,7 +378,7 @@ async function saveEntry(entry) {
 }
 
 async function deleteEntryDB(id) {
-  if (CONFIGURED) await supabase.from('entries').delete().eq('id', id);
+  if (CONFIGURED) await _supabase.from('entries').delete().eq('id', id);
   else lsSet('ogsm_entries', entries);
 }
 
@@ -447,14 +447,14 @@ async function doLogin() {
     return;
   }
 
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password: pw });
+  const { data, error } = await _supabase.auth.signInWithPassword({ email, password: pw });
   if (error) { errEl.textContent = error.message; return; }
 
-  const { data: ud } = await supabase.from('users').select('role').eq('email', email).single();
+  const { data: ud } = await _supabase.from('users').select('role').eq('email', email).single();
   const dbRole = ud?.role ?? 'team';
   if (dbRole !== authRoleSelected) {
     errEl.textContent = `Your account has "${dbRole}" access. Please select the correct role tab.`;
-    await supabase.auth.signOut();
+    await _supabase.auth.signOut();
     return;
   }
   currentRole = dbRole;
@@ -463,7 +463,7 @@ async function doLogin() {
 }
 
 function logout() {
-  if (CONFIGURED) supabase.auth.signOut();
+  if (CONFIGURED) _supabase.auth.signOut();
   currentUser = null;
   document.getElementById('authScreen').style.display = 'flex';
   document.getElementById('mainApp').style.display   = 'none';
@@ -805,7 +805,7 @@ async function deleteEntry(id) {
 
 async function clearAll() {
   if (!confirm('Clear ALL history? This cannot be undone.')) return;
-  if (CONFIGURED) await supabase.from('entries').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  if (CONFIGURED) await _supabase.from('entries').delete().neq('id', '00000000-0000-0000-0000-000000000000');
   entries = [];
   lsSet('ogsm_entries', []);
   renderAll();
