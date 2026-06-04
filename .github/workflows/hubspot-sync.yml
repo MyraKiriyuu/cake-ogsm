@@ -19,8 +19,21 @@ jobs:
           node << 'EOF'
           const https = require('https');
 
+          // ─── Indonesia BD team ───────────────────────────────────
+          const INDONESIA_TEAM_EMAILS = [
+            'myra.k@cakeresume.com',
+            'davlen.tandersen@cakeresume.com'
+          ];
+
           // ─── Currency conversion ──────────────────────────────────
-          const RATES = { USD: 1, NTD: 1/32, TWD: 1/32, IDR: 1/16000 };
+          const RATES = {
+            USD: 1,
+            NTD: 1/32, TWD: 1/32,
+            IDR: 1/16000,
+            JPY: 1/150,   // approximate JPY/USD
+            SGD: 1/1.35,  // approximate SGD/USD
+            MYR: 1/4.7,   // approximate MYR/USD
+          };
           function toUSD(amount, currency) {
             const rate = RATES[(currency || 'USD').toUpperCase()] ?? 1;
             return Math.round(amount * rate * 100) / 100;
@@ -71,8 +84,24 @@ jobs:
             }, body);
           }
 
+          // ─── Fetch HubSpot owner IDs for Indonesia team ──────────
+          async function getIndonesiaOwnerIds() {
+            console.log('Fetching HubSpot owners...');
+            const res = await hubspot('/crm/v3/owners?limit=100');
+            const owners = res.body.results || [];
+            const ids = owners
+              .filter(o => INDONESIA_TEAM_EMAILS.includes((o.email || '').toLowerCase()))
+              .map(o => o.id);
+            console.log(`Indonesia owner IDs: ${ids.join(', ')}`);
+            if (ids.length === 0) {
+              console.log('Warning: No owner IDs found for Indonesia team emails.');
+              console.log('Available owners:', owners.map(o => `${o.email} (${o.id})`).join(', '));
+            }
+            return ids;
+          }
+
           // ─── Fetch all deals from a pipeline/stage ────────────────
-          async function fetchDeals(pipelineLabel, stageLabel) {
+          async function fetchDeals(pipelineLabel, stageLabel, ownerIds) {
             console.log(`Fetching pipelines to find "${pipelineLabel}"...`);
 
             // Get all pipelines to find the right ID
@@ -97,17 +126,34 @@ jobs:
             }
             console.log(`Found stage: ${stage.label} (${stage.id})`);
 
-            // Search for deals in this stage
+            // Build owner filter if we have IDs
+            const ownerFilters = ownerIds.length > 0 ? ownerIds.map(id => ({
+              propertyName: 'hubspot_owner_id',
+              operator: 'EQ',
+              value: id
+            })) : [];
+
+            // Search for deals — one filter group per owner (OR logic)
             let deals = [];
             let after = undefined;
+
+            // If we have owner filters, fetch per owner (HubSpot uses AND within groups)
+            const filterGroups = ownerIds.length > 0
+              ? ownerIds.map(id => ({
+                  filters: [
+                    { propertyName: 'pipeline',          operator: 'EQ', value: pipeline.id },
+                    { propertyName: 'dealstage',         operator: 'EQ', value: stage.id },
+                    { propertyName: 'hubspot_owner_id',  operator: 'EQ', value: id }
+                  ]
+                }))
+              : [{ filters: [
+                    { propertyName: 'pipeline',  operator: 'EQ', value: pipeline.id },
+                    { propertyName: 'dealstage', operator: 'EQ', value: stage.id }
+                  ]}];
+
             do {
               const body = {
-                filterGroups: [{
-                  filters: [
-                    { propertyName: 'pipeline',   operator: 'EQ', value: pipeline.id },
-                    { propertyName: 'dealstage',  operator: 'EQ', value: stage.id }
-                  ]
-                }],
+                filterGroups,
                 properties: [
                   'dealname', 'amount', 'dealstage', 'pipeline',
                   'closedate', 'hs_deal_stage_probability',
@@ -141,10 +187,14 @@ jobs:
           async function main() {
             console.log('Starting HubSpot sync...');
 
+            // Get Indonesia team owner IDs first
+            const ownerIds = await getIndonesiaOwnerIds();
+
             // Fetch from both stages in Business Development pipeline
+            // filtered to Indonesia team members only
             const [closedDeals, paymentDeals] = await Promise.all([
-              fetchDeals('Business Development', 'Closed'),
-              fetchDeals('Business Development', 'Payment Received')
+              fetchDeals('Business Development', 'Closed',           ownerIds),
+              fetchDeals('Business Development', 'Payment Received', ownerIds)
             ]);
 
             console.log(`Closed deals: ${closedDeals.length}`);
