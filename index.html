@@ -257,11 +257,52 @@ input, select, textarea { font-family: var(--font); }
       </div>
       <button class="btn-signin" onclick="doLogin()">Sign in</button>
       <div class="auth-err" id="authErr"></div>
-      <div class="auth-hint" id="demoHint">
-        ⚠ Demo mode (no Supabase yet).<br>
-        Admin: admin@cake.com / admin123<br>
-        Team:&nbsp;&nbsp;team@cake.com / team123
+      <div style="text-align:center; margin-top:10px;">
+        <button onclick="showForgotPassword()" style="background:none; border:none; font-size:12px; color:var(--ink3); cursor:pointer; text-decoration:underline;">Forgot password / First time setup?</button>
       </div>
+      <div id="forgotPanel" style="display:none; margin-top:1rem; padding-top:1rem; border-top:1px solid var(--border);">
+        <p style="font-size:12px; color:var(--ink2); margin-bottom:10px; line-height:1.5;">Enter your email and we'll send you a link to set or reset your password.</p>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="resetEmail" placeholder="you@company.com">
+        </div>
+        <button onclick="sendResetEmail()" style="width:100%; padding:9px; background:var(--border); color:var(--ink); border:none; border-radius:8px; font-size:13px; font-weight:500; cursor:pointer;">Send reset link</button>
+        <div class="auth-err" id="resetErr"></div>
+        <div id="resetSuccess" style="display:none; font-size:12px; color:#1db954; margin-top:8px; text-align:center;">Reset link sent! Check your email.</div>
+      </div>
+      <div class="auth-hint" id="demoHint">
+        Demo mode (no Supabase yet).<br>
+        Admin: admin@cake.com / admin123<br>
+        Team: team@cake.com / team123
+      </div>
+    </div>
+  </div>
+
+  <!-- PASSWORD RESET PAGE -->
+  <div id="resetScreen" style="display:none; flex:1; align-items:center; justify-content:center; padding:2rem 1rem; min-height:100vh;" class="auth-screen">
+    <div class="auth-card">
+      <div class="auth-wordmark">
+        <div class="auth-wordmark-dot">
+          <svg viewBox="0 0 20 20"><path d="M10 2C5.6 2 2 5.6 2 10s3.6 8 8 8 8-3.6 8-8-3.6-8-8-8zm0 14c-3.3 0-6-2.7-6-6s2.7-6 6-6 6 2.7 6 6-2.7 6-6 6z"/></svg>
+        </div>
+        <div>
+          <div class="auth-wordmark-name">Cake Indonesia</div>
+          <div class="auth-wordmark-sub">OGSM Platform</div>
+        </div>
+      </div>
+      <h1 class="auth-heading">Set your password</h1>
+      <p class="auth-sub">Choose a strong password to secure your account.</p>
+      <div class="form-group">
+        <label>New password</label>
+        <input type="password" id="newPassword" placeholder="At least 8 characters" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label>Confirm password</label>
+        <input type="password" id="confirmPassword" placeholder="Repeat password" autocomplete="new-password"
+          onkeydown="if(event.key==='Enter') setNewPassword()">
+      </div>
+      <button class="btn-signin" onclick="setNewPassword()">Set password and sign in</button>
+      <div class="auth-err" id="resetPwErr"></div>
     </div>
   </div>
 
@@ -298,8 +339,66 @@ input, select, textarea { font-family: var(--font); }
 <div class="toast" id="toast"></div>
 
 <script>
+// ─── Password reset flow ───────────────────────────────────────
+async function checkForResetToken() {
+  const hash = window.location.hash;
+  if (hash && hash.includes('type=recovery') || hash.includes('type=invite')) {
+    const params = new URLSearchParams(hash.replace('#', ''));
+    const accessToken = params.get('access_token');
+    if (accessToken && CONFIGURED) {
+      await _supabase.auth.setSession({ access_token: accessToken, refresh_token: params.get('refresh_token') || '' });
+      document.getElementById('authScreen').style.display = 'none';
+      document.getElementById('resetScreen').style.display = 'flex';
+    }
+  }
+}
+
+function showForgotPassword() {
+  const panel = document.getElementById('forgotPanel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  if (panel.style.display === 'block') {
+    document.getElementById('resetEmail').focus();
+  }
+}
+
+async function sendResetEmail() {
+  const email = document.getElementById('resetEmail').value.trim();
+  const errEl = document.getElementById('resetErr');
+  const successEl = document.getElementById('resetSuccess');
+  errEl.textContent = '';
+  successEl.style.display = 'none';
+  if (!email) { errEl.textContent = 'Please enter your email.'; return; }
+  if (!CONFIGURED) { errEl.textContent = 'Supabase not configured yet.'; return; }
+  const { error } = await _supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.href.split('#')[0]
+  });
+  if (error) { errEl.textContent = error.message; return; }
+  successEl.style.display = 'block';
+  document.getElementById('resetEmail').value = '';
+}
+
+async function setNewPassword() {
+  const pw  = document.getElementById('newPassword').value;
+  const pw2 = document.getElementById('confirmPassword').value;
+  const errEl = document.getElementById('resetPwErr');
+  errEl.textContent = '';
+  if (!pw || pw.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; return; }
+  if (pw !== pw2) { errEl.textContent = 'Passwords do not match.'; return; }
+  const { error } = await _supabase.auth.updateUser({ password: pw });
+  if (error) { errEl.textContent = error.message; return; }
+  showToast('Password set! Signing you in...');
+  setTimeout(() => {
+    document.getElementById('resetScreen').style.display = 'none';
+    document.getElementById('authScreen').style.display = 'flex';
+    window.location.hash = '';
+  }, 1500);
+}
+
 // ─── Supabase init ─────────────────────────────────────────────
 const CONFIGURED = SUPABASE_URL !== 'YOUR_SUPABASE_URL';
+
+// Check for password reset / invite token in URL on page load
+window.addEventListener('load', () => { if (CONFIGURED) checkForResetToken(); });
 let _supabase = null;
 if (CONFIGURED) {
   _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
