@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OGSM Platform · Cake Indonesia</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ─── TOKENS ─────────────────────────────────────────────── */
+:root {
+  --g:       #1db954;
+  --g-dark:  #0f6e34;
+  --g-light: #e8f8ef;
+  --ink:     #0f0f0f;
+  --ink2:    #444;
+  --ink3:    #888;
+  --border:  #e5e5e3;
+  --surface: #fafaf9;
+  --card:    #ffffff;
+  --radius:  10px;
+  --radius-lg: 14px;
+  --font:    'DM Sans', sans-serif;
+  --mono:    'DM Mono', monospace;
+  --shadow:  0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink:     #f0f0ee;
+    --ink2:    #b0b0ae;
+    --ink3:    #6a6a68;
+    --border:  #2a2a28;
+    --surface: #111110;
+    --card:    #1a1a18;
+    --shadow:  0 1px 3px rgba(0,0,0,.3);
+  }
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); background: var(--surface); color: var(--ink); min-height: 100vh; -webkit-font-smoothing: antialiased; }
+button { font-family: var(--font); cursor: pointer; }
+input, select, textarea { font-family: var(--font); }
+.app { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* ─── AUTH ───────────────────────────────────────────────── */
+.auth-screen { flex: 1; display: flex; align-items: center; justify-content: center; padding: 2rem 1rem; min-height: 100vh; }
+.auth-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 2.5rem 2rem; width: 100%; max-width: 380px; box-shadow: var(--shadow); }
+.auth-wordmark { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 2rem; }
+.auth-wordmark-dot { width: 28px; height: 28px; background: var(--g); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+.auth-wordmark-dot svg { width: 16px; height: 16px; fill: #fff; }
+.auth-wordmark-name { font-size: 15px; font-weight: 600; color: var(--ink); }
+.auth-wordmark-sub { font-size: 12px; color: var(--ink3); margin-top: 1px; }
+.auth-heading { font-size: 22px; font-weight: 600; margin-bottom: 6px; }
+.auth-sub { font-size: 13px; color: var(--ink2); margin-bottom: 1.75rem; line-height: 1.5; }
+.role-toggle { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 3px; gap: 3px; margin-bottom: 1.5rem; }
+.role-btn { padding: 8px; font-size: 13px; font-weight: 500; border: none; border-radius: 6px; background: transparent; color: var(--ink3); transition: all .15s; }
+.role-btn.active { background: var(--card); color: var(--ink); box-shadow: var(--shadow); }
+.form-group { margin-bottom: 1rem; }
+.form-group label { display: block; font-size: 12px; font-weight: 500; color: var(--ink2); margin-bottom: 5px; }
+.form-group input { width: 100%; padding: 9px 12px; font-size: 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--ink); transition: border-color .15s; }
+.form-group input:focus { outline: none; border-color: var(--g); }
+.btn-signin { width: 100%; padding: 10px; background: var(--g); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; transition: opacity .15s; margin-top: 4px; }
+.btn-signin:hover { opacity: .88; }
+.auth-err { font-size: 12px; color: #e24b4a; margin-top: 8px; min-height: 18px; }
+.auth-hint { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border); font-size: 11px; color: var(--ink3); font-family: var(--mono); line-height: 1.8; }
+
+/* ─── TOPBAR ─────────────────────────────────────────────── */
+.topbar { background: var(--g); padding: 0 1.5rem; height: 54px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; }
+.topbar-left { display: flex; align-items: center; gap: 12px; }
+.topbar-brand { font-size: 15px; font-weight: 600; color: #fff; letter-spacing: -.01em; }
+.topbar-role { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding: 3px 9px; border-radius: 99px; background: rgba(255,255,255,.18); color: rgba(255,255,255,.9); }
+.topbar-right { display: flex; gap: 8px; }
+.btn-tbar { padding: 6px 14px; font-size: 12px; font-weight: 500; border-radius: 7px; border: none; transition: all .15s; }
+.btn-tbar-ghost { background: rgba(255,255,255,.15); color: #fff; }
+.btn-tbar-ghost:hover { background: rgba(255,255,255,.25); }
+.btn-tbar-solid { background: #fff; color: var(--g); }
+.btn-tbar-solid:hover { opacity: .9; }
+
+/* ─── NAV ────────────────────────────────────────────────── */
+.subnav { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 1.5rem; display: flex; overflow-x: auto; }
+.subnav-btn { padding: 12px 16px; font-size: 13px; font-weight: 500; border: none; background: transparent; color: var(--ink3); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; transition: all .15s; }
+.subnav-btn:hover { color: var(--ink); }
+.subnav-btn.active { color: var(--g); border-bottom-color: var(--g); }
+
+/* ─── MAIN ───────────────────────────────────────────────── */
+.main { flex: 1; padding: 1.75rem 1.5rem; max-width: 900px; width: 100%; margin: 0 auto; }
+.page { display: none; }
+.page.active { display: block; }
+.page-header { margin-bottom: 1.5rem; }
+.page-title { font-size: 20px; font-weight: 600; color: var(--ink); margin-bottom: 3px; }
+.page-sub { font-size: 13px; color: var(--ink3); line-height: 1.5; }
+
+/* ─── CARDS ──────────────────────────────────────────────── */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); }
+
+/* ─── METRICS ────────────────────────────────────────────── */
+.metric-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 1.5rem; }
+.metric-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; }
+.metric-lbl { font-size: 11px; color: var(--ink3); font-weight: 500; margin-bottom: 4px; }
+.metric-val { font-size: 22px; font-weight: 600; color: var(--ink); }
+.metric-sub { font-size: 11px; color: var(--ink3); margin-top: 3px; }
+
+/* ─── STATUS ─────────────────────────────────────────────── */
+.status-list { display: flex; flex-direction: column; gap: 6px; }
+.status-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.status-dot.filled { background: var(--g); }
+.status-dot.empty { background: var(--border); border: 1.5px solid var(--ink3); }
+.status-name { flex: 1; font-size: 13px; font-weight: 500; }
+.status-meta { font-size: 11px; color: var(--ink3); }
+
+/* ─── BUILDER ────────────────────────────────────────────── */
+.slide-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 1.25rem; }
+.slide-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.slide-card-header { display: flex; align-items: center; gap: 10px; padding: .9rem 1.1rem; cursor: pointer; background: var(--surface); border-bottom: 1px solid transparent; transition: background .15s; }
+.slide-card-header:hover { background: var(--g-light); }
+.slide-card-header.open { border-bottom-color: var(--border); }
+.slide-card-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--ink); }
+.slide-card-count { font-size: 11px; color: var(--ink3); }
+.slide-card-body { padding: 1.1rem; display: none; }
+.slide-card-body.open { display: block; }
+.field-pill-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.field-pill { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.field-pill-label { flex: 1; font-size: 12px; color: var(--ink); }
+.field-pill-type { font-size: 10px; font-family: var(--mono); font-weight: 500; padding: 2px 7px; border-radius: 99px; background: var(--card); border: 1px solid var(--border); color: var(--ink3); }
+.btn-icon-sm { background: none; border: none; color: var(--ink3); padding: 2px 4px; border-radius: 4px; font-size: 14px; }
+.btn-icon-sm:hover { background: #fee; color: #e24b4a; }
+.add-field-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.add-field-row input, .add-field-row select { padding: 7px 10px; font-size: 12px; border: 1px solid var(--border); border-radius: 7px; background: var(--card); color: var(--ink); }
+.add-field-row input { flex: 1; min-width: 140px; }
+.add-field-row input:focus, .add-field-row select:focus { outline: none; border-color: var(--g); }
+.add-slide-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.add-slide-row input { flex: 1; min-width: 180px; padding: 9px 12px; font-size: 13px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--ink); }
+.add-slide-row input:focus { outline: none; border-color: var(--g); }
+
+/* ─── BUTTONS ────────────────────────────────────────────── */
+.btn { padding: 8px 16px; font-size: 13px; font-weight: 500; border-radius: 8px; border: 1px solid transparent; transition: all .15s; }
+.btn-primary { background: var(--g); color: #fff; border-color: var(--g); }
+.btn-primary:hover { background: var(--g-dark); border-color: var(--g-dark); }
+.btn-secondary { background: var(--card); color: var(--ink); border-color: var(--border); }
+.btn-secondary:hover { border-color: var(--ink3); }
+.btn-danger { background: transparent; color: #e24b4a; border-color: #e24b4a; }
+.btn-danger:hover { background: #fee; }
+.btn-sm { padding: 5px 12px; font-size: 12px; }
+
+/* ─── ENTRY ──────────────────────────────────────────────── */
+.slide-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1.25rem; }
+.slide-chip { padding: 6px 14px; border-radius: 99px; font-size: 12px; font-weight: 500; border: 1px solid var(--border); background: var(--card); color: var(--ink3); transition: all .15s; cursor: pointer; }
+.slide-chip:hover { border-color: var(--g); color: var(--g); }
+.slide-chip.active { background: var(--g); color: #fff; border-color: var(--g); }
+.entry-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 1rem; }
+.entry-card-header { background: var(--g); padding: 1rem 1.25rem; }
+.entry-card-header h2 { font-size: 16px; font-weight: 600; color: #fff; }
+.entry-card-header p { font-size: 11px; color: rgba(255,255,255,.75); margin-top: 2px; }
+.entry-card-body { padding: 1.25rem; }
+.entry-meta-row { display: flex; gap: 8px; margin-bottom: 1.25rem; flex-wrap: wrap; }
+.entry-meta-row input { flex: 1; min-width: 140px; padding: 8px 11px; font-size: 13px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--ink); }
+.entry-meta-row input:focus { outline: none; border-color: var(--g); }
+.entry-field { margin-bottom: 1rem; }
+.entry-field label { display: block; font-size: 12px; font-weight: 500; color: var(--ink2); margin-bottom: 5px; }
+.entry-field label span { font-family: var(--mono); font-size: 10px; color: var(--ink3); font-weight: 400; margin-left: 4px; }
+.entry-field input, .entry-field textarea, .entry-field select { width: 100%; padding: 8px 11px; font-size: 13px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--ink); transition: border-color .15s; }
+.entry-field input:focus, .entry-field textarea:focus { outline: none; border-color: var(--g); }
+.entry-field textarea { min-height: 80px; resize: vertical; }
+.entry-submit-row { display: flex; align-items: center; gap: 12px; padding-top: 1rem; border-top: 1px solid var(--border); }
+.entry-submit-hint { font-size: 11px; color: var(--ink3); }
+
+/* ─── HISTORY ────────────────────────────────────────────── */
+.hist-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+.hist-chip { padding: 5px 12px; border-radius: 99px; font-size: 12px; font-weight: 500; border: 1px solid var(--border); background: var(--card); color: var(--ink3); cursor: pointer; transition: all .15s; }
+.hist-chip.active { background: var(--g); color: #fff; border-color: var(--g); }
+.hist-spacer { flex: 1; }
+.hist-count { font-size: 12px; color: var(--ink3); }
+.hist-item { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; }
+.hist-item-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+.hist-slide-name { font-size: 12px; font-weight: 600; color: var(--g); }
+.hist-period { font-size: 11px; color: var(--ink2); margin-top: 1px; }
+.hist-ts { font-size: 10px; color: var(--ink3); font-family: var(--mono); margin-top: 3px; }
+.hist-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
+.hist-field { background: var(--surface); border-radius: 6px; padding: 6px 10px; }
+.hist-field-label { font-size: 10px; color: var(--ink3); margin-bottom: 1px; }
+.hist-field-value { font-size: 13px; font-weight: 500; color: var(--ink); }
+
+/* ─── PRESENTATION ───────────────────────────────────────── */
+.pres-overlay { position: fixed; inset: 0; z-index: 200; background: #0d0d0c; display: none; flex-direction: column; }
+.pres-overlay.show { display: flex; }
+.pres-bar { background: #181816; border-bottom: 1px solid #2a2a28; padding: 0 1.5rem; height: 52px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.pres-bar-title { font-size: 13px; font-weight: 500; color: #c0c0bc; }
+.pres-bar-right { display: flex; gap: 8px; }
+.pres-btn { padding: 6px 14px; font-size: 12px; font-weight: 500; border-radius: 7px; border: 1px solid #3a3a38; background: transparent; color: #c0c0bc; cursor: pointer; }
+.pres-btn:hover { background: #2a2a28; }
+.pres-btn-green { background: var(--g); color: #fff; border-color: var(--g); }
+.pres-btn-green:hover { background: var(--g-dark); }
+.pres-scroll { flex: 1; overflow-y: auto; padding: 2.5rem 1.5rem; }
+.pres-slide { max-width: 720px; margin: 0 auto 2rem; background: #1a1a18; border: 1px solid #2a2a28; border-radius: 16px; overflow: hidden; }
+.pres-slide-head { background: var(--g); padding: 1.25rem 1.5rem; }
+.pres-slide-num { font-size: 11px; color: rgba(255,255,255,.6); margin-bottom: 3px; }
+.pres-slide-title { font-size: 20px; font-weight: 600; color: #fff; }
+.pres-slide-body { padding: 1.5rem; }
+.pres-pfield { padding: 10px 0; border-bottom: 1px solid #2a2a28; }
+.pres-pfield:last-child { border-bottom: none; padding-bottom: 0; }
+.pres-pfield-label { font-size: 11px; color: #6a6a68; margin-bottom: 3px; }
+.pres-pfield-value { font-size: 16px; font-weight: 500; color: #f0f0ee; }
+.pres-pfield-empty { font-size: 13px; color: #3a3a38; font-style: italic; }
+.pres-slide-meta { font-size: 10px; color: #4a4a48; margin-top: 12px; font-family: var(--mono); }
+
+/* ─── UTILS ──────────────────────────────────────────────── */
+.empty-state { text-align: center; padding: 3rem 1rem; color: var(--ink3); }
+.empty-state-text { font-size: 13px; line-height: 1.6; }
+.divider { border: none; border-top: 1px solid var(--border); margin: 1.25rem 0; }
+.section-title { font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: .75rem; }
+.config-banner { background: #fff8e6; border: 1px solid #f0c040; border-radius: var(--radius); padding: 1rem 1.25rem; font-size: 13px; color: #7a5a00; margin-bottom: 1.5rem; line-height: 1.6; }
+.config-banner code { font-family: var(--mono); background: rgba(0,0,0,.06); padding: 1px 5px; border-radius: 4px; }
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #111; color: #fff; padding: 10px 20px; border-radius: 99px; font-size: 13px; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 999; white-space: nowrap; border: 1px solid #2a2a28; }
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- =====================================================
+  STEP 1: Paste your Supabase credentials here.
+  Get them from: supabase.com → your project → Settings → API
+  Leave as-is to run in demo mode (localStorage only).
+====================================================== -->
+<script>
+  const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+  const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+</script>
+
+<div class="app" id="app">
+
+  <!-- AUTH -->
+  <div id="authScreen" class="auth-screen">
+    <div class="auth-card">
+      <div class="auth-wordmark">
+        <div class="auth-wordmark-dot">
+          <svg viewBox="0 0 20 20"><path d="M10 2C5.6 2 2 5.6 2 10s3.6 8 8 8 8-3.6 8-8-3.6-8-8-8zm0 14c-3.3 0-6-2.7-6-6s2.7-6 6-6 6 2.7 6 6-2.7 6-6 6z"/></svg>
+        </div>
+        <div>
+          <div class="auth-wordmark-name">Cake Indonesia</div>
+          <div class="auth-wordmark-sub">OGSM Platform</div>
+        </div>
+      </div>
+      <h1 class="auth-heading">Sign in</h1>
+      <p class="auth-sub">Choose your access level and sign in to continue.</p>
+      <div class="role-toggle">
+        <button class="role-btn active" onclick="setRole('admin', this)">Admin</button>
+        <button class="role-btn" onclick="setRole('team', this)">Team</button>
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="authEmail" placeholder="you@company.com" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="authPw" placeholder="••••••••" autocomplete="current-password"
+          onkeydown="if(event.key==='Enter') doLogin()">
+      </div>
+      <button class="btn-signin" onclick="doLogin()">Sign in</button>
+      <div class="auth-err" id="authErr"></div>
+      <div class="auth-hint" id="demoHint">
+        ⚠ Demo mode (no Supabase yet).<br>
+        Admin: admin@cake.com / admin123<br>
+        Team:&nbsp;&nbsp;team@cake.com / team123
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN APP -->
+  <div id="mainApp" style="display:none; flex-direction:column;" class="app">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-brand">Cake OGSM</div>
+        <div class="topbar-role" id="roleLabel">Admin</div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn-tbar btn-tbar-ghost" onclick="openPresentation()">▶ Present</button>
+        <button class="btn-tbar btn-tbar-solid" onclick="exportHTML()">↓ Export</button>
+        <button class="btn-tbar btn-tbar-ghost" onclick="logout()">Sign out</button>
+      </div>
+    </div>
+    <div class="subnav" id="subnav"></div>
+    <div class="main" id="pages"></div>
+  </div>
+
+  <!-- PRESENTATION OVERLAY -->
+  <div class="pres-overlay" id="presOverlay">
+    <div class="pres-bar">
+      <div class="pres-bar-title">OGSM Presentation · Cake Indonesia</div>
+      <div class="pres-bar-right">
+        <button class="pres-btn pres-btn-green" onclick="exportHTML()">↓ Export HTML</button>
+        <button class="pres-btn" onclick="closePresentation()">✕ Close</button>
+      </div>
+    </div>
+    <div class="pres-scroll" id="presContent"></div>
+  </div>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── Supabase init ─────────────────────────────────────────────
+const CONFIGURED = SUPABASE_URL !== 'YOUR_SUPABASE_URL';
+let supabase = null;
+if (CONFIGURED) {
+  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  // Hide demo hint when real credentials are set
+  document.getElementById('demoHint').style.display = 'none';
+}
+
+// ─── State ─────────────────────────────────────────────────────
+let currentUser   = null;
+let currentRole   = 'team';
+let authRoleSelected = 'admin';
+let slides        = [];
+let entries       = [];
+let histFilter    = 'all';
+let activeSlideId = null;
+
+// ─── Helpers ───────────────────────────────────────────────────
+const uid    = () => Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+const tsNow  = () => new Date().toISOString();
+const esc    = s  => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const lsGet  = k  => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
+const lsSet  = (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+function fmtTs(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })
+    + ' · ' + d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+// ─── Data layer (Supabase or localStorage fallback) ────────────
+async function loadData() {
+  if (CONFIGURED) {
+    const [sr, er] = await Promise.all([
+      supabase.from('slides').select('*').order('position'),
+      supabase.from('entries').select('*').order('created_at', { ascending: false })
+    ]);
+    slides  = (sr.data || []).map(s => ({ ...s, fields: typeof s.fields === 'string' ? JSON.parse(s.fields) : s.fields }));
+    entries = er.data || [];
+  } else {
+    slides  = lsGet('ogsm_slides')  || [];
+    entries = lsGet('ogsm_entries') || [];
+    if (!slides.length) seedSlides();
+  }
+}
+
+async function saveSlide(s) {
+  if (CONFIGURED) {
+    await supabase.from('slides').upsert({ id: s.id, title: s.title, fields: s.fields, position: s.position ?? 0 });
+  } else {
+    lsSet('ogsm_slides', slides);
+  }
+}
+
+async function deleteSlideDB(id) {
+  if (CONFIGURED) await supabase.from('slides').delete().eq('id', id);
+  else { lsSet('ogsm_slides', slides); lsSet('ogsm_entries', entries); }
+}
+
+async function saveEntry(entry) {
+  if (CONFIGURED) {
+    await supabase.from('entries').insert({
+      slide_id: entry.slideId, slide_title: entry.slideTitle,
+      data: entry.data, period: entry.period, note: entry.note, by: entry.by
+    });
+  } else {
+    lsSet('ogsm_entries', entries);
+  }
+}
+
+async function deleteEntryDB(id) {
+  if (CONFIGURED) await supabase.from('entries').delete().eq('id', id);
+  else lsSet('ogsm_entries', entries);
+}
+
+// ─── Seed (demo mode only) ─────────────────────────────────────
+function seedSlides() {
+  slides = [
+    { id: uid(), title: 'Revenue summary', position: 0, fields: [
+      { id: uid(), label: 'Total revenue (USD)',   type: 'currency' },
+      { id: uid(), label: 'Quarter target (USD)',  type: 'currency' },
+      { id: uid(), label: 'YoY growth (%)',        type: 'percent'  },
+      { id: uid(), label: 'QoQ growth (%)',        type: 'percent'  },
+      { id: uid(), label: 'Deals closed',          type: 'number'   },
+      { id: uid(), label: 'Avg deal size (USD)',   type: 'currency' },
+    ]},
+    { id: uid(), title: 'Client breakdown', position: 1, fields: [
+      { id: uid(), label: 'Top client',                            type: 'text'     },
+      { id: uid(), label: 'Top deal amount (USD)',                 type: 'currency' },
+      { id: uid(), label: 'Personalized Service revenue (USD)',    type: 'currency' },
+      { id: uid(), label: 'Retention revenue (USD)',               type: 'currency' },
+      { id: uid(), label: 'SaaS revenue (USD)',                    type: 'currency' },
+    ]},
+    { id: uid(), title: 'Apply clicks & talent', position: 2, fields: [
+      { id: uid(), label: 'Jan apply clicks',        type: 'number' },
+      { id: uid(), label: 'Feb apply clicks',        type: 'number' },
+      { id: uid(), label: 'Mar apply clicks',        type: 'number' },
+      { id: uid(), label: 'Top company by clicks',   type: 'text'   },
+      { id: uid(), label: 'New user sign-ups',       type: 'number' },
+    ]},
+    { id: uid(), title: 'Q2 OGSM — objective & goals', position: 3, fields: [
+      { id: uid(), label: 'Objective',          type: 'text'     },
+      { id: uid(), label: 'Revenue goal (USD)', type: 'currency' },
+      { id: uid(), label: 'New clients target', type: 'number'   },
+      { id: uid(), label: 'Key strategy',       type: 'text'     },
+    ]},
+    { id: uid(), title: 'Q2 pipeline', position: 4, fields: [
+      { id: uid(), label: 'New clients pipeline (USD)', type: 'currency' },
+      { id: uid(), label: 'Retention pipeline (USD)',   type: 'currency' },
+      { id: uid(), label: 'SaaS pipeline (USD)',        type: 'currency' },
+      { id: uid(), label: 'Total target (USD)',         type: 'currency' },
+      { id: uid(), label: 'Coverage (%)',               type: 'percent'  },
+    ]},
+  ];
+  lsSet('ogsm_slides', slides);
+}
+
+// ─── Auth ──────────────────────────────────────────────────────
+function setRole(role, el) {
+  authRoleSelected = role;
+  document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+async function doLogin() {
+  const email = document.getElementById('authEmail').value.trim();
+  const pw    = document.getElementById('authPw').value;
+  const errEl = document.getElementById('authErr');
+  errEl.textContent = '';
+
+  if (!CONFIGURED) {
+    const ok = (email === 'admin@cake.com' && pw === 'admin123' && authRoleSelected === 'admin')
+            || (email === 'team@cake.com'  && pw === 'team123'  && authRoleSelected === 'team');
+    if (!ok) { errEl.textContent = 'Invalid credentials.'; return; }
+    currentRole = authRoleSelected;
+    currentUser = { email };
+    enterApp();
+    return;
+  }
+
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password: pw });
+  if (error) { errEl.textContent = error.message; return; }
+
+  const { data: ud } = await supabase.from('users').select('role').eq('email', email).single();
+  const dbRole = ud?.role ?? 'team';
+  if (dbRole !== authRoleSelected) {
+    errEl.textContent = `Your account has "${dbRole}" access. Please select the correct role tab.`;
+    await supabase.auth.signOut();
+    return;
+  }
+  currentRole = dbRole;
+  currentUser = data.user;
+  enterApp();
+}
+
+function logout() {
+  if (CONFIGURED) supabase.auth.signOut();
+  currentUser = null;
+  document.getElementById('authScreen').style.display = 'flex';
+  document.getElementById('mainApp').style.display   = 'none';
+  document.getElementById('presOverlay').classList.remove('show');
+  document.getElementById('authEmail').value = '';
+  document.getElementById('authPw').value    = '';
+}
+
+async function enterApp() {
+  await loadData();
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('mainApp').style.display    = 'flex';
+  document.getElementById('roleLabel').textContent = currentRole === 'admin' ? 'Admin' : 'Team';
+  buildNav(); buildPages(); renderAll();
+}
+
+// ─── Nav ───────────────────────────────────────────────────────
+const TABS = {
+  admin: [
+    { id: 'dashboard', label: 'Dashboard'     },
+    { id: 'builder',   label: 'Slide builder' },
+    { id: 'entry',     label: 'Data entry'    },
+    { id: 'history',   label: 'History'       },
+  ],
+  team: [
+    { id: 'dashboard', label: 'Dashboard'  },
+    { id: 'entry',     label: 'Data entry' },
+    { id: 'history',   label: 'History'    },
+  ],
+};
+
+function buildNav() {
+  document.getElementById('subnav').innerHTML = TABS[currentRole].map((t, i) =>
+    `<button class="subnav-btn${i === 0 ? ' active' : ''}" onclick="goTo('${t.id}', this)">${t.label}</button>`
+  ).join('');
+}
+
+function buildPages() {
+  document.getElementById('pages').innerHTML = TABS[currentRole].map((t, i) =>
+    `<div class="page${i === 0 ? ' active' : ''}" id="page-${t.id}"></div>`
+  ).join('');
+}
+
+function goTo(id, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.subnav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + id)?.classList.add('active');
+  el?.classList.add('active');
+  renderAll();
+}
+
+// ─── Render ────────────────────────────────────────────────────
+function renderAll() {
+  renderDashboard();
+  if (currentRole === 'admin') renderBuilder();
+  renderEntry();
+  renderHistory();
+}
+
+// Dashboard
+function renderDashboard() {
+  const el = document.getElementById('page-dashboard');
+  if (!el) return;
+  const latestBySlide = {};
+  entries.forEach(e => { const id = e.slideId || e.slide_id; if (!latestBySlide[id]) latestBySlide[id] = e; });
+  const filled = Object.keys(latestBySlide).length;
+  el.innerHTML = `
+    ${!CONFIGURED ? `<div class="config-banner">
+      <strong>Demo mode.</strong> Data is stored in this browser only.
+      To enable real team access, paste your Supabase credentials into <code>index.html</code> and push to GitHub.
+    </div>` : ''}
+    <div class="page-header">
+      <div class="page-title">Dashboard</div>
+      <div class="page-sub">Current status of all slides and data entries.</div>
+    </div>
+    <div class="metric-row">
+      <div class="metric-card"><div class="metric-lbl">Total slides</div><div class="metric-val">${slides.length}</div></div>
+      <div class="metric-card"><div class="metric-lbl">Slides with data</div><div class="metric-val">${filled}<span style="font-size:14px;font-weight:400;color:var(--ink3)"> / ${slides.length}</span></div></div>
+      <div class="metric-card"><div class="metric-lbl">Total entries</div><div class="metric-val">${entries.length}</div></div>
+      <div class="metric-card"><div class="metric-lbl">Last entry</div><div class="metric-val" style="font-size:13px">${entries[0] ? fmtTs(entries[0].ts || entries[0].created_at).split(' · ')[0] : '—'}</div></div>
+    </div>
+    <div class="section-title">Slide status</div>
+    <div class="status-list">
+      ${slides.length ? slides.map(s => {
+        const e = latestBySlide[s.id];
+        return `<div class="status-item">
+          <div class="status-dot ${e ? 'filled' : 'empty'}"></div>
+          <div class="status-name">${esc(s.title)}</div>
+          <div class="status-meta">${s.fields.length} field${s.fields.length !== 1 ? 's' : ''}</div>
+          <div class="status-meta">${e ? fmtTs(e.ts || e.created_at).split(' · ')[0] : 'No data yet'}</div>
+        </div>`;
+      }).join('') : `<div class="empty-state"><div class="empty-state-text">No slides yet.</div></div>`}
+    </div>`;
+}
+
+// Builder
+function renderBuilder() {
+  const el = document.getElementById('page-builder');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="page-header">
+      <div class="page-title">Slide builder</div>
+      <div class="page-sub">Add slides and define the fields your team fills in each quarter or event.</div>
+    </div>
+    <div class="slide-list">
+      ${slides.map(renderSlideCard).join('')}
+      ${!slides.length ? `<div class="empty-state"><div class="empty-state-text">No slides yet.</div></div>` : ''}
+    </div>
+    <div class="section-title">Add new slide</div>
+    <div class="add-slide-row">
+      <input type="text" id="newSlideTitle" placeholder="e.g. 'Event: Young Talent June 2026'">
+      <button class="btn btn-primary" onclick="addSlide()">+ Add slide</button>
+    </div>`;
+}
+
+function renderSlideCard(s) {
+  return `<div class="slide-card">
+    <div class="slide-card-header" id="sh_${s.id}" onclick="toggleSlide('${s.id}')">
+      <div class="slide-card-title">${esc(s.title)}</div>
+      <div class="slide-card-count">${s.fields.length} field${s.fields.length !== 1 ? 's' : ''}</div>
+      <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); deleteSlide('${s.id}')">Delete</button>
+      <span style="color:var(--ink3); font-size:12px">&#8964;</span>
+    </div>
+    <div class="slide-card-body" id="sb_${s.id}">
+      <div class="field-pill-list">
+        ${s.fields.map(f => `
+          <div class="field-pill">
+            <div class="field-pill-label">${esc(f.label)}</div>
+            <div class="field-pill-type">${f.type}</div>
+            <button class="btn-icon-sm" onclick="deleteField('${s.id}', '${f.id}')">✕</button>
+          </div>`).join('')}
+        ${!s.fields.length ? `<div style="font-size:12px;color:var(--ink3);padding:4px 0">No fields yet — add one below.</div>` : ''}
+      </div>
+      <div class="add-field-row">
+        <input type="text" id="fn_${s.id}" placeholder="Field label e.g. 'Event registrations'"
+          onkeydown="if(event.key==='Enter') addField('${s.id}')">
+        <select id="ft_${s.id}">
+          <option value="number">Number</option>
+          <option value="text">Text</option>
+          <option value="percent">Percent</option>
+          <option value="currency">Currency (USD)</option>
+          <option value="date">Date</option>
+          <option value="url">URL</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="addField('${s.id}')">+ Add field</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function toggleSlide(id) {
+  document.getElementById('sb_' + id)?.classList.toggle('open');
+  document.getElementById('sh_' + id)?.classList.toggle('open');
+}
+
+async function addSlide() {
+  const inp = document.getElementById('newSlideTitle');
+  const title = inp.value.trim();
+  if (!title) { showToast('Enter a slide title'); return; }
+  const s = { id: uid(), title, fields: [], position: slides.length };
+  slides.push(s);
+  await saveSlide(s);
+  inp.value = '';
+  renderBuilder(); renderEntry(); renderDashboard();
+  showToast('Slide added');
+}
+
+async function deleteSlide(id) {
+  if (!confirm('Delete this slide and all its data entries?')) return;
+  slides  = slides.filter(s => s.id !== id);
+  entries = entries.filter(e => (e.slideId || e.slide_id) !== id);
+  await deleteSlideDB(id);
+  renderAll();
+  showToast('Slide deleted');
+}
+
+async function addField(slideId) {
+  const labelEl = document.getElementById('fn_' + slideId);
+  const typeEl  = document.getElementById('ft_' + slideId);
+  const label   = labelEl?.value.trim();
+  const type    = typeEl?.value ?? 'text';
+  if (!label) { showToast('Enter a field label'); return; }
+  const s = slides.find(s => s.id === slideId);
+  if (!s) return;
+  s.fields.push({ id: uid(), label, type });
+  await saveSlide(s);
+  labelEl.value = '';
+  renderBuilder();
+  renderEntry();
+  document.getElementById('sb_' + slideId)?.classList.add('open');
+  document.getElementById('sh_' + slideId)?.classList.add('open');
+  showToast('Field added');
+}
+
+async function deleteField(slideId, fieldId) {
+  const s = slides.find(s => s.id === slideId);
+  if (!s) return;
+  s.fields = s.fields.filter(f => f.id !== fieldId);
+  await saveSlide(s);
+  renderBuilder(); renderEntry();
+  showToast('Field removed');
+}
+
+// Entry
+function renderEntry() {
+  const el = document.getElementById('page-entry');
+  if (!el) return;
+  if (!slides.length) {
+    el.innerHTML = `<div class="page-header"><div class="page-title">Data entry</div></div>
+      <div class="empty-state"><div class="empty-state-text">
+        ${currentRole === 'admin' ? 'No slides yet — create some in Slide builder.' : 'No slides set up yet. Ask your admin to create slides first.'}
+      </div></div>`;
+    return;
+  }
+  if (!activeSlideId || !slides.find(s => s.id === activeSlideId)) activeSlideId = slides[0].id;
+  const active = slides.find(s => s.id === activeSlideId);
+  const latest = entries.find(e => (e.slideId || e.slide_id) === activeSlideId);
+  el.innerHTML = `
+    <div class="page-header">
+      <div class="page-title">Data entry</div>
+      <div class="page-sub">Select a slide and fill in the latest values. Every save is timestamped and logged.</div>
+    </div>
+    <div class="slide-chips">
+      ${slides.map(s => `<button class="slide-chip${s.id === activeSlideId ? ' active' : ''}" onclick="selectSlide('${s.id}')">${esc(s.title)}</button>`).join('')}
+    </div>
+    <div class="entry-card">
+      <div class="entry-card-header">
+        <h2>${esc(active.title)}</h2>
+        <p>${latest ? `Last saved ${fmtTs(latest.ts || latest.created_at)} by ${latest.by}` : 'No data yet for this slide'}</p>
+      </div>
+      <div class="entry-card-body">
+        <div class="entry-meta-row">
+          <input type="text" id="ef_period" placeholder="Period / event e.g. 'Q2 2026' or 'June Talent Webinar'">
+          <input type="text" id="ef_note"   placeholder="Note (optional)">
+        </div>
+        ${active.fields.map(f => `
+          <div class="entry-field">
+            <label>${esc(f.label)} <span>(${f.type})</span></label>
+            ${f.type === 'text'
+              ? `<textarea id="ef_${f.id}" placeholder="${esc(f.label)}">${latest?.data?.[f.id] ?? ''}</textarea>`
+              : f.type === 'date'
+              ? `<input type="date" id="ef_${f.id}" value="${latest?.data?.[f.id] ?? ''}">`
+              : f.type === 'url'
+              ? `<input type="url" id="ef_${f.id}" placeholder="https://" value="${esc(latest?.data?.[f.id] ?? '')}">`
+              : `<input type="number" id="ef_${f.id}" placeholder="0" value="${latest?.data?.[f.id] ?? ''}">`
+            }
+          </div>`).join('')}
+        ${!active.fields.length ? `<p style="font-size:13px;color:var(--ink3)">No fields defined for this slide yet.</p>` : ''}
+        <div class="entry-submit-row">
+          <button class="btn btn-primary" onclick="submitEntry()">✓ Save entry</button>
+          <span class="entry-submit-hint">Timestamped · visible in History</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+function selectSlide(id) { activeSlideId = id; renderEntry(); }
+
+async function submitEntry() {
+  const active = slides.find(s => s.id === activeSlideId);
+  if (!active) return;
+  const data = {};
+  active.fields.forEach(f => {
+    const inp = document.getElementById('ef_' + f.id);
+    if (inp) data[f.id] = inp.value.trim();
+  });
+  const entry = {
+    id: uid(), slideId: active.id, slideTitle: active.title,
+    data,
+    period: document.getElementById('ef_period')?.value.trim() ?? '',
+    note:   document.getElementById('ef_note')?.value.trim()   ?? '',
+    by:     currentRole === 'admin' ? 'Admin' : 'Team',
+    ts:     tsNow(),
+  };
+  entries.unshift(entry);
+  await saveEntry(entry);
+  renderAll();
+  showToast('Entry saved ✓');
+}
+
+// History
+function renderHistory() {
+  const el = document.getElementById('page-history');
+  if (!el) return;
+  const filtered = histFilter === 'all' ? entries : entries.filter(e => (e.slideId || e.slide_id) === histFilter);
+  el.innerHTML = `
+    <div class="page-header">
+      <div class="page-title">History</div>
+      <div class="page-sub">Every entry logged with timestamp, author, and period label.</div>
+    </div>
+    <div class="hist-toolbar">
+      <button class="hist-chip${histFilter === 'all' ? ' active' : ''}" onclick="setHistFilter('all', this)">All</button>
+      ${slides.map(s => `<button class="hist-chip${histFilter === s.id ? ' active' : ''}" onclick="setHistFilter('${s.id}', this)">${esc(s.title)}</button>`).join('')}
+      <div class="hist-spacer"></div>
+      <span class="hist-count">${filtered.length} entr${filtered.length === 1 ? 'y' : 'ies'}</span>
+      ${currentRole === 'admin' ? `<button class="btn btn-sm btn-danger" onclick="clearAll()">Clear all</button>` : ''}
+    </div>
+    <div>
+      ${filtered.length
+        ? filtered.map(renderHistItem).join('')
+        : `<div class="empty-state"><div class="empty-state-text">No entries yet.</div></div>`}
+    </div>`;
+}
+
+function renderHistItem(e) {
+  const s = slides.find(sl => sl.id === (e.slideId || e.slide_id));
+  return `<div class="hist-item">
+    <div class="hist-item-top">
+      <div>
+        <div class="hist-slide-name">${esc(e.slideTitle || e.slide_title)}</div>
+        ${e.period ? `<div class="hist-period">${esc(e.period)}</div>` : ''}
+        <div class="hist-ts">${fmtTs(e.ts || e.created_at)} · by ${esc(e.by)}${e.note ? ` · ${esc(e.note)}` : ''}</div>
+      </div>
+      ${currentRole === 'admin' ? `<button class="btn btn-sm btn-danger" onclick="deleteEntry('${e.id}')">Delete</button>` : ''}
+    </div>
+    <div class="hist-fields">
+      ${s ? s.fields.map(f => `
+        <div class="hist-field">
+          <div class="hist-field-label">${esc(f.label)}</div>
+          <div class="hist-field-value">${esc(e.data?.[f.id]) || '—'}</div>
+        </div>`).join('') : ''}
+    </div>
+  </div>`;
+}
+
+function setHistFilter(f, el) {
+  histFilter = f;
+  document.querySelectorAll('.hist-chip').forEach(c => c.classList.remove('active'));
+  el?.classList.add('active');
+  renderHistory();
+}
+
+async function deleteEntry(id) {
+  entries = entries.filter(e => e.id !== id);
+  await deleteEntryDB(id);
+  renderHistory(); renderDashboard();
+  showToast('Entry deleted');
+}
+
+async function clearAll() {
+  if (!confirm('Clear ALL history? This cannot be undone.')) return;
+  if (CONFIGURED) await supabase.from('entries').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  entries = [];
+  lsSet('ogsm_entries', []);
+  renderAll();
+  showToast('History cleared');
+}
+
+// Presentation
+function buildPresHTML() {
+  const latestBySlide = {};
+  entries.forEach(e => { const id = e.slideId || e.slide_id; if (!latestBySlide[id]) latestBySlide[id] = e; });
+  if (!slides.length) return `<div style="text-align:center;padding:3rem;color:#555">No slides yet.</div>`;
+  return slides.map((s, i) => {
+    const e = latestBySlide[s.id];
+    return `<div class="pres-slide">
+      <div class="pres-slide-head">
+        <div class="pres-slide-num">Slide ${i + 1} of ${slides.length}</div>
+        <div class="pres-slide-title">${esc(s.title)}</div>
+      </div>
+      <div class="pres-slide-body">
+        ${e ? `
+          ${e.period ? `<div style="font-size:12px;color:#5a5a58;margin-bottom:1rem">Period: ${esc(e.period)}</div>` : ''}
+          ${s.fields.map(f => `
+            <div class="pres-pfield">
+              <div class="pres-pfield-label">${esc(f.label)}</div>
+              <div class="pres-pfield-value">${esc(e.data?.[f.id]) || '—'}</div>
+            </div>`).join('')}
+          <div class="pres-slide-meta">Updated ${fmtTs(e.ts || e.created_at)} · ${esc(e.by)}</div>
+        ` : `<div class="pres-pfield-empty">No data entered yet.</div>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openPresentation() {
+  document.getElementById('presContent').innerHTML = buildPresHTML();
+  document.getElementById('presOverlay').classList.add('show');
+}
+function closePresentation() {
+  document.getElementById('presOverlay').classList.remove('show');
+}
+
+function exportHTML() {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OGSM Presentation · Cake Indonesia</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:#f5f5f3;padding:2.5rem 1.5rem;color:#0f0f0f;-webkit-font-smoothing:antialiased}
+.cover{max-width:720px;margin:0 auto 2rem;background:#1db954;border-radius:16px;padding:2.5rem}
+.cover-label{font-size:11px;color:rgba(255,255,255,.7);letter-spacing:.07em;text-transform:uppercase;margin-bottom:8px}
+.cover h1{font-size:28px;font-weight:700;color:#fff;margin-bottom:4px}
+.cover p{font-size:14px;color:rgba(255,255,255,.8)}
+.pres-slide{max-width:720px;margin:0 auto 1.5rem;background:#fff;border:1px solid #e5e5e3;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.pres-slide-head{background:#1db954;padding:1.25rem 1.5rem}
+.pres-slide-num{font-size:11px;color:rgba(255,255,255,.65);margin-bottom:3px}
+.pres-slide-title{font-size:20px;font-weight:600;color:#fff}
+.pres-slide-body{padding:1.5rem}
+.pres-pfield{padding:10px 0;border-bottom:1px solid #f0f0ee}
+.pres-pfield:last-child{border-bottom:none;padding-bottom:0}
+.pres-pfield-label{font-size:11px;color:#888;margin-bottom:3px}
+.pres-pfield-value{font-size:16px;font-weight:500;color:#0f0f0f}
+.pres-pfield-empty{font-size:13px;color:#bbb;font-style:italic}
+.pres-slide-meta{font-size:10px;color:#aaa;margin-top:12px;font-family:monospace}
+.footer{text-align:center;font-size:11px;color:#aaa;max-width:720px;margin:0 auto;padding:1rem 0 2rem}
+</style>
+</head>
+<body>
+<div class="cover">
+  <div class="cover-label">Cake Indonesia · Business Team</div>
+  <h1>OGSM Presentation</h1>
+  <p>Exported ${new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'long', year:'numeric' })}</p>
+</div>
+${buildPresHTML()}
+<div class="footer">Generated by Cake OGSM Platform · ${new Date().getFullYear()}</div>
+</body></html>`;
+
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+  a.download = `OGSM_Cake_Indonesia_${new Date().toISOString().slice(0, 10)}.html`;
+  a.click();
+  showToast('Exported successfully');
+}
+</script>
+</body>
+</html>
