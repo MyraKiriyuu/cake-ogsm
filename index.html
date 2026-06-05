@@ -397,8 +397,47 @@ async function setNewPassword() {
 // ─── Supabase init ─────────────────────────────────────────────
 const CONFIGURED = SUPABASE_URL !== 'YOUR_SUPABASE_URL';
 
+// ─── Session persistence (8 hour login) ───────────────────────
+const SESSION_KEY = 'ogsm_session';
+const SESSION_TTL = 8 * 60 * 60 * 1000; // 8 hours in ms
+
+function saveSession(role) {
+  lsSet(SESSION_KEY, { role, ts: Date.now() });
+}
+
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+
+async function restoreSession() {
+  const saved = lsGet(SESSION_KEY);
+  if (!saved) return false;
+  if (Date.now() - saved.ts > SESSION_TTL) {
+    clearSession();
+    return false;
+  }
+  if (CONFIGURED) {
+    const { data } = await _supabase.auth.getSession();
+    if (!data?.session) { clearSession(); return false; }
+  }
+  currentRole = saved.role;
+  currentUser = { email: saved.email || '' };
+  return true;
+}
+
 // Check for password reset / invite token in URL on page load
-window.addEventListener('load', () => { if (CONFIGURED) checkForResetToken(); });
+window.addEventListener('load', async () => {
+  if (CONFIGURED) checkForResetToken();
+  // Try to restore session
+  const restored = await restoreSession();
+  if (restored) {
+    await loadData();
+    document.getElementById('authScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display    = 'flex';
+    document.getElementById('roleLabel').textContent = currentRole === 'admin' ? 'Admin' : 'Team';
+    buildNav(); buildPages(); renderAll();
+  }
+});
 let _supabase = null;
 if (CONFIGURED) {
   _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -542,6 +581,7 @@ async function doLogin() {
     if (!ok) { errEl.textContent = 'Invalid credentials.'; return; }
     currentRole = authRoleSelected;
     currentUser = { email };
+    saveSession(currentRole);
     enterApp();
     return;
   }
@@ -558,11 +598,13 @@ async function doLogin() {
   }
   currentRole = dbRole;
   currentUser = data.user;
+  saveSession(currentRole);
   enterApp();
 }
 
 function logout() {
   if (CONFIGURED) _supabase.auth.signOut();
+  clearSession();
   currentUser = null;
   document.getElementById('authScreen').style.display = 'flex';
   document.getElementById('mainApp').style.display   = 'none';
@@ -632,19 +674,144 @@ function fmtPct(n) {
   return (n > 0 ? '+' : '') + n + '%';
 }
 
+// ─── HubSpot period state ──────────────────────────────────────
+let hsPeriodMode = 'quarter';   // 'quarter' | 'semester' | 'month' | 'all'
+let hsYear       = new Date().getFullYear();
+let hsPeriodVal  = Math.floor(new Date().getMonth() / 3) + 1; // current Q
+
+async function loadHubSpotDeals(filters) {
+  if (!CONFIGURED) return [];
+  try {
+    let query = `${SUPABASE_URL}/rest/v1/hubspot_deals?select=*`;
+    if (filters) query += '&' + filters;
+    const res = await fetch(query, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+    });
+    return await res.json() || [];
+  } catch { return []; }
+}
+
 async function loadHubSpotSummary() {
   if (!CONFIGURED) return null;
   try {
-    const url = new URL(SUPABASE_URL);
     const res = await fetch(`${SUPABASE_URL}/rest/v1/hubspot_summary?order=synced_at.desc&limit=1`, {
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`
-      }
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
     });
     const data = await res.json();
     return data?.[0] || null;
   } catch { return null; }
+}
+
+async function loadHubSpotForPeriod() {
+  if (!CONFIGURED) return null;
+  try {
+    // Build date range based on selected period
+    let startDate, endDate;
+    const y = hsYear;
+
+    if (hsPeriodMode === 'quarter') {
+      const q = hsPeriodVal;
+      const startMonth = (q - 1) * 3;
+      startDate = new Date(y, startMonth, 1);
+      endDate   = new Date(y, startMonth + 3, 0, 23, 59, 59);
+    } else if (hsPeriodMode === 'semester') {
+      const h = hsPeriodVal;
+      startDate = new Date(y, h === 1 ? 0 : 6, 1);
+      endDate   = new Date(y, h === 1 ? 6 : 12, 0, 23, 59, 59);
+    } else if (hsPeriodMode === 'month') {
+      const m = hsPeriodVal - 1;
+      startDate = new Date(y, m, 1);
+      endDate   = new Date(y, m + 1, 0, 23, 59, 59);
+    } else {
+      // All time — return summary from Supabase
+      return await loadHubSpotSummary();
+    }
+
+    const start = startDate.toISOString();
+    const end   = endDate.toISOString();
+
+    // Fetch contracted deals in period
+    const contracted = await loadHubSpotDeals(
+      `source=eq.contracted&close_date=gte.${start}&close_date=lte.${end}`
+    );
+    const payments = await loadHubSpotDeals(
+      `source=eq.payment_received&close_date=gte.${start}&close_date=lte.${end}`
+    );
+
+    const sum = arr => arr.reduce((s, d) => s + parseFloat(d.amount_usd || 0), 0);
+    const totalContracted = sum(contracted);
+    const totalPayments   = sum(payments);
+
+    const topClients = [...contracted]
+      .sort((a, b) => parseFloat(b.amount_usd) - parseFloat(a.amount_usd))
+      .slice(0, 10)
+      .map(d => ({
+        name:       d.company_name || d.deal_name,
+        amount_usd: parseFloat(d.amount_usd),
+        deal_name:  d.deal_name,
+        close_date: d.close_date
+      }));
+
+    const periodLabel = hsPeriodMode === 'quarter'  ? `Q${hsPeriodVal} ${y}`
+                      : hsPeriodMode === 'semester' ? `H${hsPeriodVal} ${y}`
+                      : hsPeriodMode === 'month'    ? new Date(y, hsPeriodVal-1, 1).toLocaleString('en-GB', { month:'long', year:'numeric' })
+                      : 'All time';
+
+    return {
+      quarter:              periodLabel,
+      total_contracted_usd: Math.round(totalContracted * 100) / 100,
+      total_payments_usd:   Math.round(totalPayments * 100) / 100,
+      deal_count:           contracted.length,
+      avg_deal_usd:         contracted.length > 0 ? Math.round(totalContracted / contracted.length * 100) / 100 : 0,
+      qoq_growth_pct:       null,
+      yoy_growth_pct:       null,
+      top_clients:          topClients,
+      synced_at:            new Date().toISOString()
+    };
+  } catch(e) {
+    console.error('Period load error:', e);
+    return null;
+  }
+}
+
+function buildPeriodSelector() {
+  const now = new Date();
+  const curY = now.getFullYear();
+  const sel = 'padding:5px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);';
+
+  const years = [curY, curY-1, curY-2].map(function(y) {
+    return '<option value="' + y + '"' + (y === hsYear ? ' selected' : '') + '>' + y + '</option>';
+  }).join('');
+
+  let periodOptions = '';
+  if (hsPeriodMode === 'quarter') {
+    periodOptions = [1,2,3,4].map(function(q) {
+      return '<option value="' + q + '"' + (q === hsPeriodVal ? ' selected' : '') + '>Q' + q + '</option>';
+    }).join('');
+  } else if (hsPeriodMode === 'semester') {
+    periodOptions = [1,2].map(function(h) {
+      return '<option value="' + h + '"' + (h === hsPeriodVal ? ' selected' : '') + '>H' + h + '</option>';
+    }).join('');
+  } else if (hsPeriodMode === 'month') {
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    periodOptions = months.map(function(m, i) {
+      return '<option value="' + (i+1) + '"' + ((i+1) === hsPeriodVal ? ' selected' : '') + '>' + m + '</option>';
+    }).join('');
+  }
+
+  var modeSelect = '<select onchange="hsPeriodMode=this.value; hsPeriodVal=1; renderDashboard();" style="' + sel + '">'
+    + '<option value="quarter"'  + (hsPeriodMode==='quarter'  ? ' selected' : '') + '>By Quarter</option>'
+    + '<option value="semester"' + (hsPeriodMode==='semester' ? ' selected' : '') + '>By Semester</option>'
+    + '<option value="month"'    + (hsPeriodMode==='month'    ? ' selected' : '') + '>By Month</option>'
+    + '<option value="all"'      + (hsPeriodMode==='all'      ? ' selected' : '') + '>All Time</option>'
+    + '</select>';
+
+  var periodSelect = hsPeriodMode !== 'all'
+    ? '<select onchange="hsPeriodVal=parseInt(this.value); renderDashboard();" style="' + sel + '">' + periodOptions + '</select>'
+      + '<select onchange="hsYear=parseInt(this.value); renderDashboard();" style="' + sel + '">' + years + '</select>'
+    : '';
+
+  return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' + modeSelect + periodSelect + '</div>';
 }
 
 async function renderDashboard() {
@@ -654,48 +821,23 @@ async function renderDashboard() {
   entries.forEach(e => { const id = e.slideId || e.slide_id; if (!latestBySlide[id]) latestBySlide[id] = e; });
   const filled = Object.keys(latestBySlide).length;
 
-  const hs = await loadHubSpotSummary();
+  // Show loading state first
+  const hsPlaceholder = `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.5rem;text-align:center;">
+    <div style="font-size:13px;color:var(--ink3);">Loading HubSpot data...</div>
+  </div>`;
 
   el.innerHTML = `
     ${!CONFIGURED ? `<div class="config-banner">
       <strong>Demo mode.</strong> Data is stored in this browser only.
-      To enable real team access, paste your Supabase credentials into <code>index.html</code> and push to GitHub.
     </div>` : ''}
     <div class="page-header">
       <div class="page-title">Dashboard</div>
       <div class="page-sub">Current status of all slides and data entries.</div>
     </div>
+    <div id="hsPanel">${CONFIGURED ? hsPlaceholder : ''}</div>`;
 
-    ${hs ? `
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:1.5rem;">
-      <div style="background:var(--g);padding:.85rem 1.25rem;display:flex;align-items:center;justify-content:space-between;">
-        <div style="font-size:14px;font-weight:600;color:#fff;">HubSpot live data · ${hs.quarter}</div>
-        <div style="font-size:11px;color:rgba(255,255,255,.75);">Synced ${fmtTs(hs.synced_at)}</div>
-      </div>
-      <div style="padding:1.25rem;">
-        <div class="metric-row" style="margin-bottom:1.25rem;">
-          <div class="metric-card"><div class="metric-lbl">Contracted (${hs.quarter})</div><div class="metric-val">${fmtUSD(hs.total_contracted_usd)}</div><div class="metric-sub">${hs.deal_count} deal${hs.deal_count !== 1 ? 's' : ''}</div></div>
-          <div class="metric-card"><div class="metric-lbl">Payments received</div><div class="metric-val">${fmtUSD(hs.total_payments_usd)}</div><div class="metric-sub">cash collected</div></div>
-          <div class="metric-card"><div class="metric-lbl">Avg deal size</div><div class="metric-val">${fmtUSD(hs.avg_deal_usd)}</div></div>
-          <div class="metric-card"><div class="metric-lbl">QoQ growth</div><div class="metric-val" style="color:${hs.qoq_growth_pct >= 0 ? 'var(--g)' : '#e24b4a'}">${fmtPct(hs.qoq_growth_pct)}</div></div>
-          <div class="metric-card"><div class="metric-lbl">YoY growth</div><div class="metric-val" style="color:${hs.yoy_growth_pct >= 0 ? 'var(--g)' : '#e24b4a'}">${fmtPct(hs.yoy_growth_pct)}</div></div>
-        </div>
-        ${hs.top_clients?.length ? `
-        <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:.75rem;">Top clients this quarter</div>
-        <div style="display:flex;flex-direction:column;gap:6px;">
-          ${hs.top_clients.map((c, i) => `
-            <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border-radius:var(--radius);">
-              <div style="font-size:11px;font-weight:600;color:var(--g);width:18px;">${i+1}</div>
-              <div style="flex:1;font-size:13px;color:var(--ink);font-weight:500;">${esc(c.name)}</div>
-              <div style="font-size:13px;font-weight:600;color:var(--ink);">${fmtUSD(c.amount_usd)}</div>
-            </div>`).join('')}
-        </div>` : ''}
-      </div>
-    </div>` : CONFIGURED ? `
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.5rem;text-align:center;">
-      <div style="font-size:13px;color:var(--ink3);margin-bottom:8px;">No HubSpot data yet.</div>
-      <div style="font-size:12px;color:var(--ink3);">Go to GitHub → Actions → <strong>Sync HubSpot to Supabase</strong> → Run workflow to trigger your first sync.</div>
-    </div>` : ''}
+  // Render slides status immediately
+  const slideStatusHTML = `
     <div class="metric-row">
       <div class="metric-card"><div class="metric-lbl">Total slides</div><div class="metric-val">${slides.length}</div></div>
       <div class="metric-card"><div class="metric-lbl">Slides with data</div><div class="metric-val">${filled}<span style="font-size:14px;font-weight:400;color:var(--ink3)"> / ${slides.length}</span></div></div>
@@ -713,6 +855,74 @@ async function renderDashboard() {
           <div class="status-meta">${e ? fmtTs(e.ts || e.created_at).split(' · ')[0] : 'No data yet'}</div>
         </div>`;
       }).join('') : `<div class="empty-state"><div class="empty-state-text">No slides yet.</div></div>`}
+    </div>`;
+
+  el.innerHTML += slideStatusHTML;
+
+  if (!CONFIGURED) return;
+
+  // Load HubSpot data async and inject into panel
+  const hs = await loadHubSpotForPeriod();
+  const hsPanel = document.getElementById('hsPanel');
+  if (!hsPanel) return;
+
+  if (hs) {
+    hsPanel.innerHTML = `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:1.5rem;">
+      <div style="background:var(--g);padding:.85rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div style="font-size:14px;font-weight:600;color:#fff;">HubSpot · ${esc(hs.quarter)}</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${buildPeriodSelector()}
+        </div>
+      </div>
+      <div style="padding:1.25rem;">
+        <div class="metric-row" style="margin-bottom:1.25rem;">
+          <div class="metric-card"><div class="metric-lbl">Contracted</div><div class="metric-val">${fmtUSD(hs.total_contracted_usd)}</div><div class="metric-sub">${hs.deal_count} deal${hs.deal_count !== 1 ? 's' : ''}</div></div>
+          <div class="metric-card"><div class="metric-lbl">Payments received</div><div class="metric-val">${fmtUSD(hs.total_payments_usd)}</div><div class="metric-sub">cash collected</div></div>
+          <div class="metric-card"><div class="metric-lbl">Avg deal size</div><div class="metric-val">${fmtUSD(hs.avg_deal_usd)}</div></div>
+          <div class="metric-card"><div class="metric-lbl">Gap</div><div class="metric-val" style="color:${hs.total_payments_usd >= hs.total_contracted_usd ? 'var(--g)':'#e24b4a'}">${fmtUSD(Math.abs(hs.total_payments_usd - hs.total_contracted_usd))}</div><div class="metric-sub">${hs.total_payments_usd >= hs.total_contracted_usd ? 'overpaid':'outstanding'}</div></div>
+        </div>
+        ${hs.top_clients?.length ? `
+        <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:.75rem;">Top clients — ${esc(hs.quarter)}</div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${hs.top_clients.map((c, i) => `
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border-radius:var(--radius);">
+              <div style="font-size:11px;font-weight:600;color:var(--g);width:18px;">${i+1}</div>
+              <div style="flex:1;font-size:13px;color:var(--ink);font-weight:500;">${esc(c.name)}</div>
+              <div style="font-size:13px;font-weight:600;color:var(--ink);">${fmtUSD(c.amount_usd)}</div>
+            </div>`).join('')}
+        </div>` : `<div style="font-size:13px;color:var(--ink3);">No contracted deals in this period.</div>`}
+      </div>
+    </div>`;
+  } else {
+    hsPanel.innerHTML = `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.5rem;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">
+        <div style="font-size:13px;color:var(--ink3);">No HubSpot data yet. Run the sync workflow first.</div>
+        ${buildPeriodSelector()}
+      </div>
+    </div>`;
+  }
+
+  // Append slide status below HubSpot panel
+  el.innerHTML += `
+    <div class="metric-row">
+      <div class="metric-card"><div class="metric-lbl">Total slides</div><div class="metric-val">${slides.length}</div></div>
+      <div class="metric-card"><div class="metric-lbl">Slides with data</div><div class="metric-val">${filled}<span style="font-size:14px;font-weight:400;color:var(--ink3)"> / ${slides.length}</span></div></div>
+      <div class="metric-card"><div class="metric-lbl">Total entries</div><div class="metric-val">${entries.length}</div></div>
+      <div class="metric-card"><div class="metric-lbl">Last entry</div><div class="metric-val" style="font-size:13px">${entries[0] ? fmtTs(entries[0].ts || entries[0].created_at).split(' · ')[0] : '—'}</div></div>
+    </div>
+    <div class="section-title">Slide status</div>
+    <div class="status-list">
+      ${slides.length ? slides.map(s => {
+        const e = latestBySlide[s.id];
+        return '<div class="status-item">'
+          + '<div class="status-dot ' + (e ? 'filled' : 'empty') + '"></div>'
+          + '<div class="status-name">' + esc(s.title) + '</div>'
+          + '<div class="status-meta">' + s.fields.length + ' field' + (s.fields.length !== 1 ? 's' : '') + '</div>'
+          + '<div class="status-meta">' + (e ? fmtTs(e.ts || e.created_at).split(' · ')[0] : 'No data yet') + '</div>'
+          + '</div>';
+      }).join('') : '<div class="empty-state"><div class="empty-state-text">No slides yet.</div></div>'}
     </div>`;
 }
 
