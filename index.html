@@ -702,45 +702,101 @@ async function loadHubSpotSummary() {
   } catch { return null; }
 }
 
+function getDateRange(mode, periodVal, year) {
+  let startDate, endDate;
+  if (mode === 'quarter') {
+    const startMonth = (periodVal - 1) * 3;
+    startDate = new Date(year, startMonth, 1);
+    endDate   = new Date(year, startMonth + 3, 0, 23, 59, 59);
+  } else if (mode === 'semester') {
+    startDate = new Date(year, periodVal === 1 ? 0 : 6, 1);
+    endDate   = new Date(year, periodVal === 1 ? 6 : 12, 0, 23, 59, 59);
+  } else if (mode === 'month') {
+    startDate = new Date(year, periodVal - 1, 1);
+    endDate   = new Date(year, periodVal, 0, 23, 59, 59);
+  }
+  return { startDate, endDate };
+}
+
+function getPreviousPeriod(mode, periodVal, year) {
+  // QoQ: previous quarter/semester/month
+  let qoqPeriod, qoqYear;
+  if (mode === 'quarter') {
+    qoqPeriod = periodVal === 1 ? 4 : periodVal - 1;
+    qoqYear   = periodVal === 1 ? year - 1 : year;
+  } else if (mode === 'semester') {
+    qoqPeriod = periodVal === 1 ? 2 : 1;
+    qoqYear   = periodVal === 1 ? year - 1 : year;
+  } else if (mode === 'month') {
+    qoqPeriod = periodVal === 1 ? 12 : periodVal - 1;
+    qoqYear   = periodVal === 1 ? year - 1 : year;
+  }
+  // YoY: same period last year
+  return {
+    qoq: { periodVal: qoqPeriod, year: qoqYear },
+    yoy: { periodVal, year: year - 1 }
+  };
+}
+
+async function fetchPeriodTotal(mode, periodVal, year) {
+  const { startDate, endDate } = getDateRange(mode, periodVal, year);
+  if (!startDate) return 0;
+  const deals = await loadHubSpotDeals(
+    `source=eq.contracted&close_date=gte.${startDate.toISOString()}&close_date=lte.${endDate.toISOString()}`
+  );
+  return deals.reduce((s, d) => s + parseFloat(d.amount_usd || 0), 0);
+}
+
+function calcGrowth(current, previous) {
+  if (!previous || previous === 0) return null;
+  return Math.round((current - previous) / previous * 1000) / 10;
+}
+
 async function loadHubSpotForPeriod() {
   if (!CONFIGURED) return null;
   try {
-    // Build date range based on selected period
-    let startDate, endDate;
     const y = hsYear;
 
-    if (hsPeriodMode === 'quarter') {
-      const q = hsPeriodVal;
-      const startMonth = (q - 1) * 3;
-      startDate = new Date(y, startMonth, 1);
-      endDate   = new Date(y, startMonth + 3, 0, 23, 59, 59);
-    } else if (hsPeriodMode === 'semester') {
-      const h = hsPeriodVal;
-      startDate = new Date(y, h === 1 ? 0 : 6, 1);
-      endDate   = new Date(y, h === 1 ? 6 : 12, 0, 23, 59, 59);
-    } else if (hsPeriodMode === 'month') {
-      const m = hsPeriodVal - 1;
-      startDate = new Date(y, m, 1);
-      endDate   = new Date(y, m + 1, 0, 23, 59, 59);
-    } else {
-      // All time — return summary from Supabase
+    if (hsPeriodMode === 'all') {
       return await loadHubSpotSummary();
     }
 
+    const { startDate, endDate } = getDateRange(hsPeriodMode, hsPeriodVal, y);
     const start = startDate.toISOString();
     const end   = endDate.toISOString();
 
-    // Fetch contracted deals in period
-    const contracted = await loadHubSpotDeals(
-      `source=eq.contracted&close_date=gte.${start}&close_date=lte.${end}`
-    );
-    const payments = await loadHubSpotDeals(
-      `source=eq.payment_received&close_date=gte.${start}&close_date=lte.${end}`
-    );
+    // Fetch current period deals + payments in parallel
+    const [contracted, payments] = await Promise.all([
+      loadHubSpotDeals(`source=eq.contracted&close_date=gte.${start}&close_date=lte.${end}`),
+      loadHubSpotDeals(`source=eq.payment_received&close_date=gte.${start}&close_date=lte.${end}`)
+    ]);
 
     const sum = arr => arr.reduce((s, d) => s + parseFloat(d.amount_usd || 0), 0);
     const totalContracted = sum(contracted);
     const totalPayments   = sum(payments);
+
+    // Fetch comparison periods in parallel for QoQ and YoY
+    const { qoq, yoy } = getPreviousPeriod(hsPeriodMode, hsPeriodVal, y);
+    const [qoqTotal, yoyTotal] = await Promise.all([
+      fetchPeriodTotal(hsPeriodMode, qoq.periodVal, qoq.year),
+      fetchPeriodTotal(hsPeriodMode, yoy.periodVal, yoy.year)
+    ]);
+
+    const qoqGrowth = calcGrowth(totalContracted, qoqTotal);
+    const yoyGrowth = calcGrowth(totalContracted, yoyTotal);
+
+    // Build period labels for comparison display
+    const periodLabel = hsPeriodMode === 'quarter'  ? `Q${hsPeriodVal} ${y}`
+                      : hsPeriodMode === 'semester' ? `H${hsPeriodVal} ${y}`
+                      : new Date(y, hsPeriodVal-1, 1).toLocaleString('en-GB', { month:'long', year:'numeric' });
+
+    const qoqLabel = hsPeriodMode === 'quarter'  ? `Q${qoq.periodVal} ${qoq.year}`
+                   : hsPeriodMode === 'semester' ? `H${qoq.periodVal} ${qoq.year}`
+                   : new Date(qoq.year, qoq.periodVal-1, 1).toLocaleString('en-GB', { month:'long', year:'numeric' });
+
+    const yoyLabel = hsPeriodMode === 'quarter'  ? `Q${hsPeriodVal} ${yoy.year}`
+                   : hsPeriodMode === 'semester' ? `H${hsPeriodVal} ${yoy.year}`
+                   : new Date(yoy.year, hsPeriodVal-1, 1).toLocaleString('en-GB', { month:'long', year:'numeric' });
 
     const topClients = [...contracted]
       .sort((a, b) => parseFloat(b.amount_usd) - parseFloat(a.amount_usd))
@@ -752,19 +808,20 @@ async function loadHubSpotForPeriod() {
         close_date: d.close_date
       }));
 
-    const periodLabel = hsPeriodMode === 'quarter'  ? `Q${hsPeriodVal} ${y}`
-                      : hsPeriodMode === 'semester' ? `H${hsPeriodVal} ${y}`
-                      : hsPeriodMode === 'month'    ? new Date(y, hsPeriodVal-1, 1).toLocaleString('en-GB', { month:'long', year:'numeric' })
-                      : 'All time';
-
     return {
       quarter:              periodLabel,
+      qoq_label:            qoqLabel,
+      yoy_label:            yoyLabel,
+      qoq_total:            Math.round(qoqTotal * 100) / 100,
+      yoy_total:            Math.round(yoyTotal * 100) / 100,
       total_contracted_usd: Math.round(totalContracted * 100) / 100,
       total_payments_usd:   Math.round(totalPayments * 100) / 100,
       deal_count:           contracted.length,
-      avg_deal_usd:         contracted.length > 0 ? Math.round(totalContracted / contracted.length * 100) / 100 : 0,
-      qoq_growth_pct:       null,
-      yoy_growth_pct:       null,
+      avg_deal_usd:         contracted.length > 0
+                              ? Math.round(totalContracted / contracted.length * 100) / 100
+                              : 0,
+      qoq_growth_pct:       qoqGrowth,
+      yoy_growth_pct:       yoyGrowth,
       top_clients:          topClients,
       synced_at:            new Date().toISOString()
     };
@@ -880,7 +937,19 @@ async function renderDashboard() {
           <div class="metric-card"><div class="metric-lbl">Contracted</div><div class="metric-val">${fmtUSD(hs.total_contracted_usd)}</div><div class="metric-sub">${hs.deal_count} deal${hs.deal_count !== 1 ? 's' : ''}</div></div>
           <div class="metric-card"><div class="metric-lbl">Payments received</div><div class="metric-val">${fmtUSD(hs.total_payments_usd)}</div><div class="metric-sub">cash collected</div></div>
           <div class="metric-card"><div class="metric-lbl">Avg deal size</div><div class="metric-val">${fmtUSD(hs.avg_deal_usd)}</div></div>
-          <div class="metric-card"><div class="metric-lbl">Gap</div><div class="metric-val" style="color:${hs.total_payments_usd >= hs.total_contracted_usd ? 'var(--g)':'#e24b4a'}">${fmtUSD(Math.abs(hs.total_payments_usd - hs.total_contracted_usd))}</div><div class="metric-sub">${hs.total_payments_usd >= hs.total_contracted_usd ? 'overpaid':'outstanding'}</div></div>
+          <div class="metric-card"><div class="metric-lbl">Gap (contracted vs paid)</div><div class="metric-val" style="color:${hs.total_payments_usd >= hs.total_contracted_usd ? 'var(--g)':'#e24b4a'}">${fmtUSD(Math.abs(hs.total_payments_usd - hs.total_contracted_usd))}</div><div class="metric-sub">${hs.total_payments_usd >= hs.total_contracted_usd ? 'overpaid':'outstanding'}</div></div>
+        </div>
+        <div class="metric-row" style="margin-bottom:1.25rem;">
+          <div class="metric-card">
+            <div class="metric-lbl">QoQ growth vs ${esc(hs.qoq_label || 'prev period')}</div>
+            <div class="metric-val" style="color:${(hs.qoq_growth_pct ?? 0) >= 0 ? 'var(--g)' : '#e24b4a'}">${fmtPct(hs.qoq_growth_pct)}</div>
+            <div class="metric-sub">${fmtUSD(hs.qoq_total)} prev period</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-lbl">YoY growth vs ${esc(hs.yoy_label || 'same period last year')}</div>
+            <div class="metric-val" style="color:${(hs.yoy_growth_pct ?? 0) >= 0 ? 'var(--g)' : '#e24b4a'}">${fmtPct(hs.yoy_growth_pct)}</div>
+            <div class="metric-sub">${fmtUSD(hs.yoy_total)} same period LY</div>
+          </div>
         </div>
         ${hs.top_clients?.length ? `
         <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:.75rem;">Top clients — ${esc(hs.quarter)}</div>
