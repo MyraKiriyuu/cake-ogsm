@@ -339,7 +339,7 @@ input, select, textarea { font-family: var(--font); }
 <div class="toast" id="toast"></div>
 
 <script>
-// ─── Password reset flow ───────────────────────────────────────
+// --- Password reset flow ---------------------------------------
 async function checkForResetToken() {
   const hash = window.location.hash;
   if (hash && hash.includes('type=recovery') || hash.includes('type=invite')) {
@@ -394,10 +394,10 @@ async function setNewPassword() {
   }, 1500);
 }
 
-// ─── Supabase init ─────────────────────────────────────────────
+// --- Supabase init ---------------------------------------------
 const CONFIGURED = SUPABASE_URL !== 'YOUR_SUPABASE_URL';
 
-// ─── Session persistence (8 hour login) ───────────────────────
+// --- Session persistence (8 hour login) -----------------------
 const SESSION_KEY = 'ogsm_session';
 const SESSION_TTL = 8 * 60 * 60 * 1000; // 8 hours in ms
 
@@ -445,7 +445,7 @@ if (CONFIGURED) {
   document.getElementById('demoHint').style.display = 'none';
 }
 
-// ─── State ─────────────────────────────────────────────────────
+// --- State -----------------------------------------------------
 let currentUser   = null;
 let currentRole   = 'team';
 let authRoleSelected = 'admin';
@@ -454,7 +454,7 @@ let entries       = [];
 let histFilter    = 'all';
 let activeSlideId = null;
 
-// ─── Helpers ───────────────────────────────────────────────────
+// --- Helpers ---------------------------------------------------
 const uid    = () => Date.now() + '_' + Math.random().toString(36).slice(2, 7);
 const tsNow  = () => new Date().toISOString();
 const esc    = s  => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -462,7 +462,7 @@ const lsGet  = k  => { try { return JSON.parse(localStorage.getItem(k)); } catch
 const lsSet  = (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 
 function fmtTs(iso) {
-  if (!iso) return '—';
+  if (!iso) return '--';
   const d = new Date(iso);
   return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })
     + ' · ' + d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
@@ -475,7 +475,7 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2400);
 }
 
-// ─── Data layer (Supabase or localStorage fallback) ────────────
+// --- Data layer (Supabase or localStorage fallback) ------------
 async function loadData() {
   if (CONFIGURED) {
     const [sr, er] = await Promise.all([
@@ -489,6 +489,7 @@ async function loadData() {
     entries = lsGet('ogsm_entries') || [];
     if (!slides.length) seedSlides();
   }
+  await loadClickEntries();
 }
 
 async function saveSlide(s) {
@@ -520,7 +521,7 @@ async function deleteEntryDB(id) {
   else lsSet('ogsm_entries', entries);
 }
 
-// ─── Seed (demo mode only) ─────────────────────────────────────
+// --- Seed (demo mode only) -------------------------------------
 function seedSlides() {
   slides = [
     { id: uid(), title: 'Revenue summary', position: 0, fields: [
@@ -545,7 +546,7 @@ function seedSlides() {
       { id: uid(), label: 'Top company by clicks',   type: 'text'   },
       { id: uid(), label: 'New user sign-ups',       type: 'number' },
     ]},
-    { id: uid(), title: 'Q2 OGSM — objective & goals', position: 3, fields: [
+    { id: uid(), title: 'Q2 OGSM -- objective & goals', position: 3, fields: [
       { id: uid(), label: 'Objective',          type: 'text'     },
       { id: uid(), label: 'Revenue goal (USD)', type: 'currency' },
       { id: uid(), label: 'New clients target', type: 'number'   },
@@ -562,7 +563,7 @@ function seedSlides() {
   lsSet('ogsm_slides', slides);
 }
 
-// ─── Auth ──────────────────────────────────────────────────────
+// --- Auth ------------------------------------------------------
 function setRole(role, el) {
   authRoleSelected = role;
   document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
@@ -621,18 +622,20 @@ async function enterApp() {
   buildNav(); buildPages(); renderAll();
 }
 
-// ─── Nav ───────────────────────────────────────────────────────
+// --- Nav -------------------------------------------------------
 const TABS = {
   admin: [
     { id: 'dashboard', label: 'Dashboard'     },
     { id: 'builder',   label: 'Slide builder' },
     { id: 'entry',     label: 'Data entry'    },
+    { id: 'clicks',    label: 'Apply clicks'  },
     { id: 'history',   label: 'History'       },
   ],
   team: [
-    { id: 'dashboard', label: 'Dashboard'  },
-    { id: 'entry',     label: 'Data entry' },
-    { id: 'history',   label: 'History'    },
+    { id: 'dashboard', label: 'Dashboard'    },
+    { id: 'entry',     label: 'Data entry'   },
+    { id: 'clicks',    label: 'Apply clicks' },
+    { id: 'history',   label: 'History'      },
   ],
 };
 
@@ -648,6 +651,69 @@ function buildPages() {
   ).join('');
 }
 
+// --- Apply clicks state ----------------------------------------
+let clickEntries   = [];
+let clickEntryType = 'event'; // 'event' or 'job'
+let clickFilter    = 'all';
+
+async function loadClickEntries() {
+  clickEntries = lsGet('ogsm_clicks') || [];
+  if (CONFIGURED) {
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/apply_clicks?order=created_at.desc`,
+        { headers }
+      );
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) clickEntries = data;
+    } catch(e) { console.error('Click load error:', e); }
+  }
+}
+
+async function saveClickEntry(entry) {
+  clickEntries.unshift(entry);
+  lsSet('ogsm_clicks', clickEntries);
+  if (CONFIGURED) {
+    try {
+      const headers = await getAuthHeaders();
+      await fetch(`${SUPABASE_URL}/rest/v1/apply_clicks`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+          entry_type:    entry.type,
+          company:       entry.company,
+          title:         entry.title,
+          job_slug:      entry.jobSlug  || null,
+          period:        entry.period,
+          event_date:    entry.eventDate || null,
+          registrations: entry.registrations ? parseInt(entry.registrations) : null,
+          attendees:     entry.attendees     ? parseInt(entry.attendees)     : null,
+          apply_clicks:  entry.applyClicks   ? parseInt(entry.applyClicks)   : null,
+          job_views:     entry.jobViews      ? parseInt(entry.jobViews)      : null,
+          note:          entry.note          || null,
+          by:            entry.by
+        })
+      });
+    } catch(e) { console.error('Click save error:', e); }
+  }
+}
+
+async function deleteClickEntry(id) {
+  clickEntries = clickEntries.filter(e => e.id !== id);
+  lsSet('ogsm_clicks', clickEntries);
+  if (CONFIGURED) {
+    try {
+      const headers = await getAuthHeaders();
+      await fetch(`${SUPABASE_URL}/rest/v1/apply_clicks?id=eq.${id}`, {
+        method: 'DELETE', headers
+      });
+    } catch(e) { console.error('Click delete error:', e); }
+  }
+  renderClicks();
+  showToast('Entry deleted');
+}
+
 function goTo(id, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.subnav-btn').forEach(b => b.classList.remove('active'));
@@ -656,25 +722,242 @@ function goTo(id, el) {
   renderAll();
 }
 
-// ─── Render ────────────────────────────────────────────────────
+// --- Render ----------------------------------------------------
 function renderAll() {
   renderDashboard();
   if (currentRole === 'admin') renderBuilder();
   renderEntry();
+  renderClicks();
   renderHistory();
+}
+
+function renderClicks() {
+  const el = document.getElementById('page-clicks');
+  if (!el) return;
+
+  // Stats
+  const events = clickEntries.filter(e => (e.entry_type || e.type) === 'event');
+  const jobs   = clickEntries.filter(e => (e.entry_type || e.type) === 'job');
+  const totalClicks = clickEntries.reduce((s, e) => s + (parseInt(e.apply_clicks || e.applyClicks) || 0), 0);
+  const totalRegs   = events.reduce((s, e) => s + (parseInt(e.registrations) || 0), 0);
+
+  // Filter
+  const filtered = clickFilter === 'all'   ? clickEntries
+                 : clickFilter === 'event' ? events
+                 : jobs;
+
+  // Top companies by clicks
+  const byCompany = {};
+  clickEntries.forEach(e => {
+    const co = e.company || 'Unknown';
+    byCompany[co] = (byCompany[co] || 0) + (parseInt(e.apply_clicks || e.applyClicks) || 0);
+  });
+  const topCompanies = Object.entries(byCompany)
+    .sort((a,b) => b[1] - a[1]).slice(0, 5);
+  const maxClicks = topCompanies[0]?.[1] || 1;
+
+  el.innerHTML = `
+    <div class="page-header">
+      <div class="page-title">Apply clicks</div>
+      <div class="page-sub">
+        Track apply clicks and event performance across job postings and campaigns.
+        Log each event or job posting separately -- every entry is timestamped, attributed to you,
+        and visible to the whole team in the history log below.
+      </div>
+    </div>
+
+    <div class="metric-row">
+      <div class="metric-card"><div class="metric-lbl">Total apply clicks</div><div class="metric-val">${totalClicks.toLocaleString()}</div><div class="metric-sub">${clickEntries.length} entr${clickEntries.length !== 1 ? 'ies' : 'y'}</div></div>
+      <div class="metric-card"><div class="metric-lbl">Events logged</div><div class="metric-val">${events.length}</div><div class="metric-sub">${totalRegs.toLocaleString()} total registrations</div></div>
+      <div class="metric-card"><div class="metric-lbl">Job postings logged</div><div class="metric-val">${jobs.length}</div></div>
+    </div>
+
+    ${topCompanies.length ? `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.5rem;">
+      <div class="section-title" style="margin-bottom:.75rem;">Top companies by apply clicks</div>
+      ${topCompanies.map(([co, clicks]) =>
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
+        + '<div style="width:130px;font-size:12px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + esc(co) + '">' + esc(co) + '</div>'
+        + '<div style="flex:1;height:8px;background:var(--surface);border-radius:99px;overflow:hidden;">'
+        + '<div style="width:' + Math.round(clicks/maxClicks*100) + '%;height:100%;background:var(--g);border-radius:99px;"></div></div>'
+        + '<div style="width:60px;text-align:right;font-size:12px;font-weight:500;color:var(--ink);">' + clicks.toLocaleString() + '</div>'
+        + '</div>'
+      ).join('')}
+    </div>` : ''}
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem;">
+
+      <!-- Event entry form -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
+        <div style="background:var(--g);padding:.85rem 1.25rem;">
+          <div style="font-size:14px;font-weight:600;color:#fff;">Log an event</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px;">Webinars, campus visits, offline events. Track registrations, attendance and apply clicks per event.</div>
+        </div>
+        <div style="padding:1.25rem;">
+          <div class="entry-field"><label>Event name *</label><input type="text" id="ev-title" placeholder="e.g. Young Talent Webinar - J&T Cargo"></div>
+          <div class="entry-field"><label>Company *</label><input type="text" id="ev-company" placeholder="e.g. JT Cargo"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="entry-field"><label>Event date</label><input type="date" id="ev-date"></div>
+            <div class="entry-field"><label>Period</label><input type="text" id="ev-period" placeholder="e.g. Q2 2026"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="entry-field"><label>Registrations</label><input type="number" id="ev-regs" placeholder="0" min="0"></div>
+            <div class="entry-field"><label>Attendees</label><input type="number" id="ev-att" placeholder="0" min="0"></div>
+          </div>
+          <div class="entry-field"><label>Apply clicks</label><input type="number" id="ev-clicks" placeholder="0" min="0"></div>
+          <div class="entry-field"><label>Notes (optional)</label><input type="text" id="ev-note" placeholder="Any additional context"></div>
+          <div style="padding-top:.75rem;border-top:1px solid var(--border);">
+            <button class="btn btn-primary" onclick="submitClickEntry('event')" style="width:100%;">&#10003; Save event entry</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Job posting entry form -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
+        <div style="background:#185FA5;padding:.85rem 1.25rem;">
+          <div style="font-size:14px;font-weight:600;color:#fff;">Log a job posting</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px;">Track performance of individual job listings on Cake. Log views and apply clicks per job per period.</div>
+        </div>
+        <div style="padding:1.25rem;">
+          <div class="entry-field"><label>Job title *</label><input type="text" id="job-title" placeholder="e.g. Production Management Candidate 2026"></div>
+          <div class="entry-field"><label>Company *</label><input type="text" id="job-company" placeholder="e.g. PT PMCI (UNIQLO)"></div>
+          <div class="entry-field"><label>Job slug (optional)</label><input type="text" id="job-slug" placeholder="e.g. production-management-2026"></div>
+          <div class="entry-field"><label>Period *</label><input type="text" id="job-period" placeholder="e.g. Q1 2026 or January 2026"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="entry-field"><label>Unique job views</label><input type="number" id="job-views" placeholder="0" min="0"></div>
+            <div class="entry-field"><label>Apply clicks</label><input type="number" id="job-clicks" placeholder="0" min="0"></div>
+          </div>
+          <div class="entry-field"><label>Notes (optional)</label><input type="text" id="job-note" placeholder="Any additional context"></div>
+          <div style="padding-top:.75rem;border-top:1px solid var(--border);">
+            <button class="btn btn-primary" onclick="submitClickEntry('job')" style="width:100%;background:#185FA5;border-color:#185FA5;">&#10003; Save job entry</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- History -->
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:.75rem;">
+      <div class="section-title" style="margin-bottom:0;">Entry history</div>
+      <div style="display:flex;gap:6px;">
+        <button class="hist-chip${clickFilter==='all'   ? ' active':''}" onclick="setClickFilter('all',this)">All</button>
+        <button class="hist-chip${clickFilter==='event' ? ' active':''}" onclick="setClickFilter('event',this)">Events</button>
+        <button class="hist-chip${clickFilter==='job'   ? ' active':''}" onclick="setClickFilter('job',this)">Job postings</button>
+      </div>
+    </div>
+    <div>
+      ${filtered.length ? filtered.map(e => renderClickItem(e)).join('')
+        : '<div class="empty-state"><div class="empty-state-text">No entries yet. Use the forms above to log your first event or job posting.</div></div>'}
+    </div>`;
+}
+
+function renderClickItem(e) {
+  const type      = e.entry_type || e.type;
+  const isEvent   = type === 'event';
+  const clicks    = parseInt(e.apply_clicks || e.applyClicks) || 0;
+  const regs      = parseInt(e.registrations) || 0;
+  const att       = parseInt(e.attendees) || 0;
+  const views     = parseInt(e.job_views || e.jobViews) || 0;
+  const attRate   = regs > 0 ? Math.round(att / regs * 100) : null;
+  const convRate  = views > 0 ? Math.round(clicks / views * 100) : null;
+  const color     = isEvent ? 'var(--g)' : '#185FA5';
+  const label     = isEvent ? 'Event' : 'Job posting';
+  const title     = e.title || e.job_title || e.deal_name || '--';
+  const company   = e.company || '--';
+  const period    = e.period || (e.event_date ? e.event_date.slice(0,10) : '--');
+  const ts        = e.created_at || e.ts;
+  const by        = e.by || 'Team';
+  const note      = e.note || '';
+  const slug      = e.job_slug || e.jobSlug || '';
+
+  return '<div class="hist-item">'
+    + '<div class="hist-item-top">'
+    + '<div>'
+    + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">'
+    + '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;background:' + color + ';color:#fff;">' + label + '</span>'
+    + '<span style="font-size:13px;font-weight:600;color:var(--ink);">' + esc(title) + '</span>'
+    + '</div>'
+    + '<div style="font-size:11px;color:var(--ink2);">' + esc(company) + (slug ? ' · <span style="font-family:var(--mono);font-size:10px;">' + esc(slug) + '</span>' : '') + '</div>'
+    + '<div class="hist-ts">' + fmtTs(ts) + ' · by ' + esc(by) + (note ? ' · ' + esc(note) : '') + '</div>'
+    + '</div>'
+    + (currentRole === 'admin' ? '<button class="btn btn-sm btn-danger" onclick="deleteClickEntry(' + JSON.stringify(e.id || '') + ')">Delete</button>' : '')
+    + '</div>'
+    + '<div class="hist-fields" style="margin-top:8px;">'
+    + '<div class="hist-field"><div class="hist-field-label">Period</div><div class="hist-field-value">' + esc(period) + '</div></div>'
+    + (clicks ? '<div class="hist-field"><div class="hist-field-label">Apply clicks</div><div class="hist-field-value">' + clicks.toLocaleString() + '</div></div>' : '')
+    + (regs   ? '<div class="hist-field"><div class="hist-field-label">Registrations</div><div class="hist-field-value">' + regs.toLocaleString() + '</div></div>' : '')
+    + (att    ? '<div class="hist-field"><div class="hist-field-label">Attendees</div><div class="hist-field-value">' + att.toLocaleString() + (attRate ? ' (' + attRate + '%)' : '') + '</div></div>' : '')
+    + (views  ? '<div class="hist-field"><div class="hist-field-label">Job views</div><div class="hist-field-value">' + views.toLocaleString() + (convRate ? ' · ' + convRate + '% conv.' : '') + '</div></div>' : '')
+    + '</div>'
+    + '</div>';
+}
+
+function submitClickEntry(type) {
+  if (type === 'event') {
+    const title   = document.getElementById('ev-title')?.value.trim();
+    const company = document.getElementById('ev-company')?.value.trim();
+    if (!title || !company) { showToast('Event name and company are required'); return; }
+    const entry = {
+      id:            uid(),
+      type:          'event',
+      title,
+      company,
+      eventDate:     document.getElementById('ev-date')?.value    || null,
+      period:        document.getElementById('ev-period')?.value.trim() || '',
+      registrations: document.getElementById('ev-regs')?.value    || null,
+      attendees:     document.getElementById('ev-att')?.value     || null,
+      applyClicks:   document.getElementById('ev-clicks')?.value  || null,
+      note:          document.getElementById('ev-note')?.value.trim() || '',
+      by:            currentRole === 'admin' ? 'Admin' : 'Team',
+      ts:            tsNow()
+    };
+    saveClickEntry(entry);
+    ['ev-title','ev-company','ev-date','ev-period','ev-regs','ev-att','ev-clicks','ev-note']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  } else {
+    const title   = document.getElementById('job-title')?.value.trim();
+    const company = document.getElementById('job-company')?.value.trim();
+    const period  = document.getElementById('job-period')?.value.trim();
+    if (!title || !company || !period) { showToast('Job title, company and period are required'); return; }
+    const entry = {
+      id:          uid(),
+      type:        'job',
+      title,
+      company,
+      jobSlug:     document.getElementById('job-slug')?.value.trim()   || null,
+      period,
+      jobViews:    document.getElementById('job-views')?.value         || null,
+      applyClicks: document.getElementById('job-clicks')?.value        || null,
+      note:        document.getElementById('job-note')?.value.trim()   || '',
+      by:          currentRole === 'admin' ? 'Admin' : 'Team',
+      ts:          tsNow()
+    };
+    saveClickEntry(entry);
+    ['job-title','job-company','job-slug','job-period','job-views','job-clicks','job-note']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  }
+  renderClicks();
+  showToast('Entry saved &#10003;');
+}
+
+function setClickFilter(f, el) {
+  clickFilter = f;
+  document.querySelectorAll('.hist-chip').forEach(c => c.classList.remove('active'));
+  el?.classList.add('active');
+  renderClicks();
 }
 
 // Dashboard
 function fmtUSD(n) {
-  if (!n && n !== 0) return '—';
+  if (!n && n !== 0) return '--';
   return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 function fmtPct(n) {
-  if (n === null || n === undefined) return '—';
+  if (n === null || n === undefined) return '--';
   return (n > 0 ? '+' : '') + n + '%';
 }
 
-// ─── HubSpot period state ──────────────────────────────────────
+// --- HubSpot period state --------------------------------------
 let hsPeriodMode = 'quarter';   // 'quarter' | 'semester' | 'month' | 'all'
 let hsYear       = new Date().getFullYear();
 let hsPeriodVal  = Math.floor(new Date().getMonth() / 3) + 1; // current Q
@@ -909,6 +1192,28 @@ async function renderDashboard() {
       <div class="page-title">Dashboard</div>
       <div class="page-sub">Current status of all slides and data entries.</div>
     </div>
+
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem 1.5rem;margin-bottom:1.5rem;">
+      <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:.75rem;">Welcome to Cake OGSM Platform</div>
+      <div style="font-size:13px;color:var(--ink2);line-height:1.75;">
+        This platform helps the Cake Indonesia Business Team track, manage, and present OGSM data in one place.
+        Revenue and client data is pulled automatically from HubSpot every night -- you can see it in the panel below,
+        filtered by quarter, semester, or month. Growth metrics like QoQ and YoY are calculated automatically so you
+        always have the right numbers for your reports.
+      </div>
+      <div style="font-size:13px;color:var(--ink2);line-height:1.75;margin-top:.75rem;">
+        Use <strong>Data entry</strong> to fill in slide data for your OGSM presentation -- each slide has specific fields
+        defined by your admin, and every save is timestamped so you always know who entered what and when.
+        Use <strong>Apply clicks</strong> to log event performance (webinars, campus visits) and job posting results
+        (views, clicks per listing) -- both feed into the team history log and the top companies chart.
+      </div>
+      <div style="font-size:13px;color:var(--ink2);line-height:1.75;margin-top:.75rem;">
+        When your data is ready, hit <strong>Present</strong> in the top bar for a full-screen presentation view,
+        or <strong>Export</strong> to download a standalone HTML file you can share with anyone -- no login required.
+        ${currentRole === 'admin' ? 'As an admin, you can also use <strong>Slide builder</strong> to add new slides or fields at any time as your reporting needs evolve.' : ''}
+      </div>
+    </div>
+
     <div id="hsPanel">${CONFIGURED ? hsPlaceholder : ''}</div>`;
 
   // Render slides status immediately
@@ -917,7 +1222,7 @@ async function renderDashboard() {
       <div class="metric-card"><div class="metric-lbl">Total slides</div><div class="metric-val">${slides.length}</div></div>
       <div class="metric-card"><div class="metric-lbl">Slides with data</div><div class="metric-val">${filled}<span style="font-size:14px;font-weight:400;color:var(--ink3)"> / ${slides.length}</span></div></div>
       <div class="metric-card"><div class="metric-lbl">Total entries</div><div class="metric-val">${entries.length}</div></div>
-      <div class="metric-card"><div class="metric-lbl">Last entry</div><div class="metric-val" style="font-size:13px">${entries[0] ? fmtTs(entries[0].ts || entries[0].created_at).split(' · ')[0] : '—'}</div></div>
+      <div class="metric-card"><div class="metric-lbl">Last entry</div><div class="metric-val" style="font-size:13px">${entries[0] ? fmtTs(entries[0].ts || entries[0].created_at).split(' · ')[0] : '--'}</div></div>
     </div>
     <div class="section-title">Slide status</div>
     <div class="status-list">
@@ -970,7 +1275,7 @@ async function renderDashboard() {
           </div>
         </div>
         ${hs.top_clients?.length ? `
-        <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:.75rem;">Top clients — ${esc(hs.quarter)}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:.75rem;">Top clients -- ${esc(hs.quarter)}</div>
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${hs.top_clients.map((c, i) => `
             <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border-radius:var(--radius);">
@@ -997,7 +1302,7 @@ async function renderDashboard() {
       <div class="metric-card"><div class="metric-lbl">Total slides</div><div class="metric-val">${slides.length}</div></div>
       <div class="metric-card"><div class="metric-lbl">Slides with data</div><div class="metric-val">${filled}<span style="font-size:14px;font-weight:400;color:var(--ink3)"> / ${slides.length}</span></div></div>
       <div class="metric-card"><div class="metric-lbl">Total entries</div><div class="metric-val">${entries.length}</div></div>
-      <div class="metric-card"><div class="metric-lbl">Last entry</div><div class="metric-val" style="font-size:13px">${entries[0] ? fmtTs(entries[0].ts || entries[0].created_at).split(' · ')[0] : '—'}</div></div>
+      <div class="metric-card"><div class="metric-lbl">Last entry</div><div class="metric-val" style="font-size:13px">${entries[0] ? fmtTs(entries[0].ts || entries[0].created_at).split(' · ')[0] : '--'}</div></div>
     </div>
     <div class="section-title">Slide status</div>
     <div class="status-list">
@@ -1047,9 +1352,9 @@ function renderSlideCard(s) {
           <div class="field-pill">
             <div class="field-pill-label">${esc(f.label)}</div>
             <div class="field-pill-type">${f.type}</div>
-            <button class="btn-icon-sm" onclick="deleteField('${s.id}', '${f.id}')">✕</button>
+            <button class="btn-icon-sm" onclick="deleteField('${s.id}', '${f.id}')">&#10005;</button>
           </div>`).join('')}
-        ${!s.fields.length ? `<div style="font-size:12px;color:var(--ink3);padding:4px 0">No fields yet — add one below.</div>` : ''}
+        ${!s.fields.length ? `<div style="font-size:12px;color:var(--ink3);padding:4px 0">No fields yet -- add one below.</div>` : ''}
       </div>
       <div class="add-field-row">
         <input type="text" id="fn_${s.id}" placeholder="Field label e.g. 'Event registrations'"
@@ -1128,7 +1433,7 @@ function renderEntry() {
   if (!slides.length) {
     el.innerHTML = `<div class="page-header"><div class="page-title">Data entry</div></div>
       <div class="empty-state"><div class="empty-state-text">
-        ${currentRole === 'admin' ? 'No slides yet — create some in Slide builder.' : 'No slides set up yet. Ask your admin to create slides first.'}
+        ${currentRole === 'admin' ? 'No slides yet -- create some in Slide builder.' : 'No slides set up yet. Ask your admin to create slides first.'}
       </div></div>`;
     return;
   }
@@ -1167,7 +1472,7 @@ function renderEntry() {
           </div>`).join('')}
         ${!active.fields.length ? `<p style="font-size:13px;color:var(--ink3)">No fields defined for this slide yet.</p>` : ''}
         <div class="entry-submit-row">
-          <button class="btn btn-primary" onclick="submitEntry()">✓ Save entry</button>
+          <button class="btn btn-primary" onclick="submitEntry()">&#10003; Save entry</button>
           <span class="entry-submit-hint">Timestamped · visible in History</span>
         </div>
       </div>
@@ -1195,7 +1500,7 @@ async function submitEntry() {
   entries.unshift(entry);
   await saveEntry(entry);
   renderAll();
-  showToast('Entry saved ✓');
+  showToast('Entry saved &#10003;');
 }
 
 // History
@@ -1237,7 +1542,7 @@ function renderHistItem(e) {
       ${s ? s.fields.map(f => `
         <div class="hist-field">
           <div class="hist-field-label">${esc(f.label)}</div>
-          <div class="hist-field-value">${esc(e.data?.[f.id]) || '—'}</div>
+          <div class="hist-field-value">${esc(e.data?.[f.id]) || '--'}</div>
         </div>`).join('') : ''}
     </div>
   </div>`;
@@ -1284,7 +1589,7 @@ function buildPresHTML() {
           ${s.fields.map(f => `
             <div class="pres-pfield">
               <div class="pres-pfield-label">${esc(f.label)}</div>
-              <div class="pres-pfield-value">${esc(e.data?.[f.id]) || '—'}</div>
+              <div class="pres-pfield-value">${esc(e.data?.[f.id]) || '--'}</div>
             </div>`).join('')}
           <div class="pres-slide-meta">Updated ${fmtTs(e.ts || e.created_at)} · ${esc(e.by)}</div>
         ` : `<div class="pres-pfield-empty">No data entered yet.</div>`}
