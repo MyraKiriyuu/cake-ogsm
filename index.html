@@ -679,14 +679,30 @@ let hsPeriodMode = 'quarter';   // 'quarter' | 'semester' | 'month' | 'all'
 let hsYear       = new Date().getFullYear();
 let hsPeriodVal  = Math.floor(new Date().getMonth() / 3) + 1; // current Q
 
+async function getAuthHeaders() {
+  // Use session token if available (authenticated), fall back to anon key
+  if (CONFIGURED) {
+    const { data } = await _supabase.auth.getSession();
+    if (data?.session?.access_token) {
+      return {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${data.session.access_token}`
+      };
+    }
+  }
+  return {
+    'apikey': SUPABASE_KEY,
+    'Authorization': `Bearer ${SUPABASE_KEY}`
+  };
+}
+
 async function loadHubSpotDeals(filters) {
   if (!CONFIGURED) return [];
   try {
     let query = `${SUPABASE_URL}/rest/v1/hubspot_deals?select=*`;
     if (filters) query += '&' + filters;
-    const res = await fetch(query, {
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
-    });
+    const headers = await getAuthHeaders();
+    const res = await fetch(query, { headers });
     return await res.json() || [];
   } catch { return []; }
 }
@@ -694,9 +710,11 @@ async function loadHubSpotDeals(filters) {
 async function loadHubSpotSummary() {
   if (!CONFIGURED) return null;
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/hubspot_summary?order=synced_at.desc&limit=1`, {
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
-    });
+    const headers = await getAuthHeaders();
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/hubspot_summary?order=synced_at.desc&limit=1`,
+      { headers }
+    );
     const data = await res.json();
     return data?.[0] || null;
   } catch { return null; }
