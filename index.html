@@ -1626,6 +1626,12 @@ function renderSlideCard(s, idx) {
       <div class="field-pill-list">
         ${s.fields.map(f => `
           <div class="field-pill">
+            <div style="display:flex;flex-direction:column;gap:1px;margin-right:2px;">
+              <button class="btn-icon-sm" style="padding:0 4px;font-size:10px;line-height:1.4;"
+                onclick="event.stopPropagation();moveField('${s.id}','${f.id}',-1)" title="Move up">^</button>
+              <button class="btn-icon-sm" style="padding:0 4px;font-size:10px;line-height:1.4;"
+                onclick="event.stopPropagation();moveField('${s.id}','${f.id}',1)" title="Move down">v</button>
+            </div>
             <div class="field-pill-label" style="cursor:text;" title="Click to edit label"
               onclick="event.stopPropagation();startEditFieldLabel('${s.id}','${f.id}',this)"
               id="fl_label_${f.id}">${esc(f.label)}</div>
@@ -1700,6 +1706,25 @@ async function saveEditTitle(id, newTitle, el) {
   await saveSlide(s);
   renderEntry();
   showToast('Title updated');
+}
+
+async function moveField(slideId, fieldId, direction) {
+  const s = slides.find(function(sl){ return sl.id === slideId; });
+  if (!s) return;
+  const idx = s.fields.findIndex(function(f){ return f.id === fieldId; });
+  if (idx < 0) return;
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= s.fields.length) return;
+  const temp = s.fields[idx];
+  s.fields[idx] = s.fields[newIdx];
+  s.fields[newIdx] = temp;
+  await saveSlide(s);
+  renderBuilder();
+  renderEntry();
+  // Re-open the slide panel
+  document.getElementById('sb_' + slideId)?.classList.add('open');
+  document.getElementById('sh_' + slideId)?.classList.add('open');
+  showToast('Field moved');
 }
 
 function startEditFieldLabel(slideId, fieldId, el) {
@@ -2182,12 +2207,21 @@ async function buildPresHTML(snapshot) {
         return f !== subtitleField && f.type !== 'image';
       });
 
-      // Build image HTML
+      // Build image HTML (handles JSON array of multiple images)
       var imageHTML = imageFields.map(function(f) {
-        const imgUrl = e && e.data && e.data[f.id] ? e.data[f.id] : '';
-        if (!imgUrl) return '';
-        // Convert Google Drive view links to direct image links
-        return '<img src="' + imgUrl + '" style="max-width:80%;max-height:220px;border-radius:8px;object-fit:cover;margin-bottom:1rem;" onerror="this.hidden=true">';
+        const raw = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+        if (!raw) return '';
+        var urls = [];
+        try {
+          var parsed = JSON.parse(raw);
+          urls = Array.isArray(parsed) ? parsed.filter(Boolean) : (parsed ? [parsed] : []);
+        } catch(err) { urls = raw ? [raw] : []; }
+        if (!urls.length) return '';
+        return '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:1rem;">'
+          + urls.map(function(url) {
+              return '<img src="' + url + '" style="max-height:180px;max-width:calc(50% - 4px);border-radius:8px;object-fit:cover;flex:1;min-width:100px;" onerror="this.hidden=true">';
+            }).join('')
+          + '</div>';
       }).join('');
 
       return '<div class="pres-slide" style="min-height:300px;">'
