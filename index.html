@@ -836,6 +836,46 @@ function renderClicks() {
 
     </div>
 
+    <!-- CSV Upload -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:1.5rem;">
+      <div style="background:#6B4FA0;padding:.85rem 1.25rem;">
+        <div style="font-size:14px;font-weight:600;color:#fff;">Bulk upload via CSV</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px;">
+          Upload multiple job postings at once. Download the template, fill it in, and upload it here.
+          Each row becomes one job posting entry -- all saved with your name and a timestamp.
+        </div>
+      </div>
+      <div style="padding:1.25rem;">
+        <div style="font-size:13px;color:var(--ink2);line-height:1.7;margin-bottom:1rem;">
+          <strong>How to use:</strong> Download the CSV template below, open it in Excel or Google Sheets,
+          fill in one job posting per row, save as CSV, then upload it here. Required columns are
+          <code style="font-family:var(--mono);font-size:11px;background:var(--surface);padding:1px 5px;border-radius:4px;">company</code>,
+          <code style="font-family:var(--mono);font-size:11px;background:var(--surface);padding:1px 5px;border-radius:4px;">title</code>, and
+          <code style="font-family:var(--mono);font-size:11px;background:var(--surface);padding:1px 5px;border-radius:4px;">period</code>.
+          All other columns are optional.
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:1rem;">
+          <button class="btn btn-secondary" onclick="downloadCSVTemplate()">&#8659; Download template</button>
+          <label style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;font-size:13px;font-weight:500;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--ink);cursor:pointer;">
+            &#8657; Upload CSV
+            <input type="file" accept=".csv" style="display:none;" onchange="handleCSVUpload(this)">
+          </label>
+        </div>
+        <div id="csvPreview" style="display:none;">
+          <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:.5rem;" id="csvPreviewTitle"></div>
+          <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:.75rem;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;" id="csvPreviewTable"></table>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <button class="btn btn-primary" onclick="confirmCSVUpload()" id="csvConfirmBtn">&#10003; Save all entries</button>
+            <button class="btn btn-secondary" onclick="cancelCSVUpload()">Cancel</button>
+            <span style="font-size:11px;color:var(--ink3);" id="csvRowCount"></span>
+          </div>
+        </div>
+        <div id="csvError" style="font-size:12px;color:#e24b4a;margin-top:6px;"></div>
+      </div>
+    </div>
+
     <!-- History -->
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:.75rem;">
       <div class="section-title" style="margin-bottom:0;">Entry history</div>
@@ -890,6 +930,164 @@ function renderClickItem(e) {
     + (views  ? '<div class="hist-field"><div class="hist-field-label">Job views</div><div class="hist-field-value">' + views.toLocaleString() + (convRate ? ' · ' + convRate + '% conv.' : '') + '</div></div>' : '')
     + '</div>'
     + '</div>';
+}
+
+// --- CSV upload helpers ---------------------------------------
+const CSV_COLUMNS = [
+  { key: 'company',       label: 'company',       required: true,  hint: 'e.g. PT PMCI (UNIQLO)' },
+  { key: 'title',         label: 'title',         required: true,  hint: 'e.g. Production Management Candidate 2026' },
+  { key: 'period',        label: 'period',        required: true,  hint: 'e.g. Q2 2026 or May 2026' },
+  { key: 'job_slug',      label: 'job_slug',      required: false, hint: 'e.g. production-management-2026' },
+  { key: 'job_views',     label: 'job_views',     required: false, hint: 'e.g. 9468' },
+  { key: 'apply_clicks',  label: 'apply_clicks',  required: false, hint: 'e.g. 4191' },
+  { key: 'note',          label: 'note',          required: false, hint: 'Any additional context' },
+];
+
+let csvParsedRows = [];
+
+function downloadCSVTemplate() {
+  const headers = CSV_COLUMNS.map(function(c) { return c.key; }).join(',');
+  const example = CSV_COLUMNS.map(function(c) { return '"' + c.hint + '"'; }).join(',');
+  const hint    = CSV_COLUMNS.map(function(c) { return c.required ? '"required"' : '"optional"'; }).join(',');
+  const NL = String.fromCharCode(10);
+  const csv = headers + NL + hint + NL + example + NL;
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'cake_ogsm_job_postings_template.csv';
+  a.click();
+  showToast('Template downloaded');
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split(String.fromCharCode(10)).filter(function(l) { return l.trim(); });
+  if (lines.length < 2) return { error: 'CSV must have at least a header row and one data row.' };
+
+  // Parse header
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
+  const required = ['company', 'title', 'period'];
+  const missing = required.filter(r => !headers.includes(r));
+  if (missing.length > 0) {
+    return { error: 'Missing required columns: ' + missing.join(', ') };
+  }
+
+  // Skip hint row if it contains "required" or "optional"
+  let dataStart = 1;
+  if (lines[1] && (lines[1].includes('required') || lines[1].includes('optional'))) {
+    dataStart = 2;
+  }
+
+  const rows = [];
+  for (let i = dataStart; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    // Parse CSV row respecting quoted fields
+    const vals = [];
+    let inQ = false, cur = '';
+    for (let ci = 0; ci < lines[i].length; ci++) {
+      const ch = lines[i][ci];
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === ',' && !inQ) { vals.push(cur.trim()); cur = ''; }
+      else { cur += ch; }
+    }
+    vals.push(cur.trim());
+
+    const row = {};
+    headers.forEach((h, idx) => { row[h] = vals[idx] || ''; });
+
+    if (!row.company || !row.title || !row.period) continue; // skip empty rows
+    rows.push(row);
+  }
+
+  if (rows.length === 0) return { error: 'No valid data rows found. Make sure company, title and period are filled in.' };
+  return { rows };
+}
+
+function handleCSVUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const errEl = document.getElementById('csvError');
+  errEl.textContent = '';
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    const result = parseCSV(e.target.result);
+    if (result.error) {
+      errEl.textContent = result.error;
+      return;
+    }
+    csvParsedRows = result.rows;
+    showCSVPreview(csvParsedRows);
+  };
+  reader.readAsText(file);
+  input.value = ''; // reset so same file can be re-uploaded
+}
+
+function showCSVPreview(rows) {
+  const preview = document.getElementById('csvPreview');
+  const title   = document.getElementById('csvPreviewTitle');
+  const table   = document.getElementById('csvPreviewTable');
+  const count   = document.getElementById('csvRowCount');
+  if (!preview) return;
+
+  title.textContent = rows.length + ' job posting' + (rows.length !== 1 ? 's' : '') + ' ready to import';
+  count.textContent = rows.length + ' entr' + (rows.length !== 1 ? 'ies' : 'y') + ' will be saved';
+
+  const cols = ['company', 'title', 'period', 'job_slug', 'job_views', 'apply_clicks', 'note'];
+  const thead = '<thead><tr>' + cols.map(c =>
+    '<th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:500;color:var(--ink2);border-bottom:1px solid var(--border);white-space:nowrap;">' + c + '</th>'
+  ).join('') + '</tr></thead>';
+
+  const tbody = '<tbody>' + rows.map((row, i) =>
+    '<tr style="background:' + (i % 2 === 0 ? 'var(--surface)' : 'var(--card)') + ';">'
+    + cols.map(c =>
+      '<td style="padding:6px 10px;font-size:12px;color:var(--ink);border-bottom:1px solid var(--border);max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + (row[c] || '') + '">'
+      + (row[c] || '<span style="color:var(--ink3);">--</span>')
+      + '</td>'
+    ).join('')
+    + '</tr>'
+  ).join('') + '</tbody>';
+
+  table.innerHTML = thead + tbody;
+  preview.style.display = 'block';
+}
+
+function cancelCSVUpload() {
+  csvParsedRows = [];
+  const preview = document.getElementById('csvPreview');
+  if (preview) preview.style.display = 'none';
+  showToast('Upload cancelled');
+}
+
+async function confirmCSVUpload() {
+  if (!csvParsedRows.length) return;
+  const btn = document.getElementById('csvConfirmBtn');
+  if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
+
+  let saved = 0;
+  for (const row of csvParsedRows) {
+    const entry = {
+      id:          uid(),
+      type:        'job',
+      title:       row.title       || '',
+      company:     row.company     || '',
+      jobSlug:     row.job_slug    || null,
+      period:      row.period      || '',
+      jobViews:    row.job_views   || null,
+      applyClicks: row.apply_clicks || null,
+      note:        row.note        || '',
+      by:          currentRole === 'admin' ? 'Admin' : 'Team',
+      ts:          tsNow()
+    };
+    await saveClickEntry(entry);
+    saved++;
+  }
+
+  csvParsedRows = [];
+  const preview = document.getElementById('csvPreview');
+  if (preview) preview.style.display = 'none';
+  if (btn) { btn.textContent = '&#10003; Save all entries'; btn.disabled = false; }
+  renderClicks();
+  showToast(saved + ' entr' + (saved !== 1 ? 'ies' : 'y') + ' saved!');
 }
 
 function submitClickEntry(type) {
