@@ -494,7 +494,10 @@ async function loadData() {
 
 async function saveSlide(s) {
   if (CONFIGURED) {
-    await _supabase.from('slides').upsert({ id: s.id, title: s.title, fields: s.fields, position: s.position ?? 0 });
+    await _supabase.from('slides').upsert({
+      id: s.id, title: s.title, fields: s.fields,
+      position: s.position ?? 0, layout: s.layout || 'data'
+    });
   } else {
     lsSet('ogsm_slides', slides);
   }
@@ -1786,8 +1789,23 @@ function renderEntry() {
               ? `<input type="url" id="ef_${f.id}" placeholder="https://" value="${esc(latest?.data?.[f.id] ?? '')}">`
               : f.type === 'image'
               ? `<div>
-                  <input type="url" id="ef_${f.id}" placeholder="Paste image URL here e.g. https://drive.google.com/..." value="${esc(latest?.data?.[f.id] ?? '')}" style="margin-bottom:6px;">
-                  ${latest?.data?.[f.id] ? `<img src="${esc(latest.data[f.id])}" style="max-width:100%;max-height:160px;border-radius:6px;border:1px solid var(--border);object-fit:cover;" onerror="this.style.display='none'">` : '<div style="font-size:11px;color:var(--ink3);">Image preview will appear here after saving.</div>'}
+                  <div style="font-size:12px;color:var(--ink2);margin-bottom:8px;line-height:1.6;">
+                    Upload an image from your device. It will be stored securely and only visible to signed-in team members.
+                  </div>
+                  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+                    <label style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;font-size:12px;font-weight:500;border-radius:8px;border:1px solid var(--g);background:var(--g-light);color:var(--gd);cursor:pointer;">
+                      Upload image
+                      <input type="file" accept="image/*" style="display:none;" onchange="uploadSlideImage(this, '${f.id}', '${active.id}')">
+                    </label>
+                    <span id="img_status_${f.id}" style="font-size:11px;color:var(--ink3);"></span>
+                  </div>
+                  ${latest?.data?.[f.id] ? `
+                    <div style="position:relative;display:inline-block;">
+                      <img id="img_prev_${f.id}" src="${esc(latest.data[f.id])}" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--border);object-fit:cover;" onerror="this.hidden=true">
+                      <button onclick="clearSlideImage('${f.id}', '${active.id}')" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:99px;width:22px;height:22px;font-size:12px;cursor:pointer;line-height:1;" title="Remove image">x</button>
+                    </div>
+                  ` : '<div id="img_prev_${f.id}"></div>'}
+                  <input type="hidden" id="ef_${f.id}" value="${esc(latest?.data?.[f.id] ?? '')}">
                 </div>`
               : `<input type="number" id="ef_${f.id}" placeholder="0" value="${latest?.data?.[f.id] ?? ''}">`
             }
@@ -1803,6 +1821,66 @@ function renderEntry() {
 }
 
 function selectSlide(id) { activeSlideId = id; renderEntry(); }
+
+// ─── Supabase image upload ─────────────────────────────────────
+async function uploadSlideImage(input, fieldId, slideId) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const statusEl = document.getElementById('img_status_' + fieldId);
+  const hiddenEl = document.getElementById('ef_' + fieldId);
+  const prevEl   = document.getElementById('img_prev_' + fieldId);
+
+  if (statusEl) statusEl.textContent = 'Uploading...';
+
+  // Max 10MB check
+  if (file.size > 10 * 1024 * 1024) {
+    if (statusEl) statusEl.textContent = 'File too large. Max 10MB.';
+    return;
+  }
+
+  try {
+    const ext      = file.name.split('.').pop();
+    const fileName = slideId + '_' + fieldId + '_' + Date.now() + '.' + ext;
+
+    const { data, error } = await _supabase.storage
+      .from('ogsm-images')
+      .upload(fileName, file, { upsert: true, contentType: file.type });
+
+    if (error) {
+      if (statusEl) statusEl.textContent = 'Upload failed: ' + error.message;
+      return;
+    }
+
+    // Get signed URL valid for 10 years
+    const { data: signedData } = await _supabase.storage
+      .from('ogsm-images')
+      .createSignedUrl(fileName, 60 * 60 * 24 * 365 * 10);
+
+    const url = signedData?.signedUrl || '';
+
+    // Update hidden input and preview
+    if (hiddenEl) hiddenEl.value = url;
+    if (prevEl) {
+      prevEl.innerHTML = '<div style="position:relative;display:inline-block;">'
+        + '<img src="' + url + '" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--border);object-fit:cover;">'
+        + '<button onclick="clearSlideImage(' + JSON.stringify(fieldId) + ', ' + JSON.stringify(slideId) + ')" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:99px;width:22px;height:22px;font-size:12px;cursor:pointer;line-height:1;" title="Remove image">x</button>'
+        + '</div>';
+    }
+    if (statusEl) statusEl.textContent = 'Uploaded successfully';
+    setTimeout(function() { if (statusEl) statusEl.textContent = ''; }, 3000);
+
+  } catch(e) {
+    if (statusEl) statusEl.textContent = 'Upload error: ' + e.message;
+  }
+}
+
+async function clearSlideImage(fieldId, slideId) {
+  const hiddenEl = document.getElementById('ef_' + fieldId);
+  const prevEl   = document.getElementById('img_prev_' + fieldId);
+  if (hiddenEl) hiddenEl.value = '';
+  if (prevEl) prevEl.innerHTML = '';
+}
 
 async function submitEntry() {
   const active = slides.find(s => s.id === activeSlideId);
@@ -2006,9 +2084,7 @@ async function buildPresHTML(snapshot) {
         const imgUrl = e && e.data && e.data[f.id] ? e.data[f.id] : '';
         if (!imgUrl) return '';
         // Convert Google Drive view links to direct image links
-        var gMatch2 = imgUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-        const directUrl = gMatch2 ? 'https://drive.google.com/thumbnail?id=' + gMatch2[1] + '&sz=w1000' : imgUrl;
-        return '<img src="' + directUrl + '" style="max-width:80%;max-height:220px;border-radius:8px;object-fit:cover;margin-bottom:1rem;" onerror="this.hidden=true">';
+        return '<img src="' + imgUrl + '" style="max-width:80%;max-height:220px;border-radius:8px;object-fit:cover;margin-bottom:1rem;" onerror="this.hidden=true">';
       }).join('');
 
       return '<div class="pres-slide" style="min-height:300px;">'
@@ -2043,16 +2119,11 @@ async function buildPresHTML(snapshot) {
           // Image field rendering
           if (f.type === 'image') {
             var imgSrc = rawVal;
-            // Auto-convert Google Drive view links to thumbnail format
-            if (imgSrc && imgSrc.indexOf('drive.google.com') >= 0) {
-              var match = imgSrc.match(/\/d\/([a-zA-Z0-9_-]+)/);
-              if (match) imgSrc = 'https://drive.google.com/thumbnail?id=' + match[1] + '&sz=w1000';
-            }
             return '<div class="pres-pfield">'
               + '<div class="pres-pfield-label">' + esc(f.label) + '</div>'
               + (imgSrc
                 ? '<img src="' + imgSrc + '" style="max-width:100%;max-height:280px;border-radius:8px;object-fit:cover;margin-top:4px;" onerror="this.hidden=true">'
-                : '<div class="pres-pfield-empty">No image URL provided.</div>')
+                : '<div class="pres-pfield-empty">No image uploaded yet.</div>')
               + '</div>';
           }
 
