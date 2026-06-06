@@ -1526,7 +1526,7 @@ function renderBuilder() {
       <div class="page-sub">Add slides and define the fields your team fills in each quarter or event.</div>
     </div>
     <div class="slide-list">
-      ${slides.map(renderSlideCard).join('')}
+      ${slides.map(function(s, i) { return renderSlideCard(s, i); }).join('')}
       ${!slides.length ? `<div class="empty-state"><div class="empty-state-text">No slides yet.</div></div>` : ''}
     </div>
     <div class="section-title">Add new slide</div>
@@ -1536,9 +1536,18 @@ function renderBuilder() {
     </div>`;
 }
 
-function renderSlideCard(s) {
-  return `<div class="slide-card">
+function renderSlideCard(s, idx) {
+  const isFirst = idx === 0;
+  const isLast  = idx === slides.length - 1;
+  return `<div class="slide-card" id="sc_${s.id}">
     <div class="slide-card-header" id="sh_${s.id}" onclick="toggleSlide('${s.id}')">
+      <div style="display:flex;flex-direction:column;gap:2px;margin-right:4px;">
+        <button class="btn-icon-sm" style="padding:1px 5px;font-size:11px;${isFirst ? 'opacity:.3;cursor:default;' : ''}"
+          onclick="event.stopPropagation();${isFirst ? '' : 'moveSlide(\'' + s.id + '\', -1)'}" title="Move up">&#9650;</button>
+        <button class="btn-icon-sm" style="padding:1px 5px;font-size:11px;${isLast ? 'opacity:.3;cursor:default;' : ''}"
+          onclick="event.stopPropagation();${isLast ? '' : 'moveSlide(\'' + s.id + '\', 1)'}" title="Move down">&#9660;</button>
+      </div>
+      <div style="font-size:11px;color:var(--ink3);font-weight:500;min-width:20px;">${idx + 1}</div>
       <div class="slide-card-title">${esc(s.title)}</div>
       <div class="slide-card-count">${s.fields.length} field${s.fields.length !== 1 ? 's' : ''}</div>
       <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); deleteSlide('${s.id}')">Delete</button>
@@ -1590,6 +1599,28 @@ function renderSlideCard(s) {
 function toggleSlide(id) {
   document.getElementById('sb_' + id)?.classList.toggle('open');
   document.getElementById('sh_' + id)?.classList.toggle('open');
+}
+
+async function moveSlide(id, direction) {
+  const idx = slides.findIndex(function(s) { return s.id === id; });
+  if (idx === -1) return;
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= slides.length) return;
+
+  // Swap slides
+  const temp = slides[idx];
+  slides[idx]    = slides[newIdx];
+  slides[newIdx] = temp;
+
+  // Update positions
+  slides.forEach(function(s, i) { s.position = i; });
+
+  // Save both affected slides
+  await Promise.all([saveSlide(slides[idx]), saveSlide(slides[newIdx])]);
+
+  renderBuilder();
+  renderEntry();
+  showToast('Slide moved');
 }
 
 async function addSlide() {
@@ -1918,6 +1949,7 @@ async function buildPresHTML(snapshot) {
         }).join('')
       + (!e && !hasLiveFields ? '<div class="pres-pfield-empty">No data entered yet.</div>' : '')
       + (e ? '<div class="pres-slide-meta" style="margin-top:12px;">Updated ' + fmtTs(e.ts || e.created_at) + ' · ' + esc(e.by) + '</div>' : '')
+      + '<div style="margin-top:1.25rem;padding-top:.75rem;border-top:1px solid rgba(255,255,255,.1);font-size:10px;color:rgba(255,255,255,.35);text-align:right;">Designed by Myra via Claude AI</div>'
       + '</div>'
       + '</div>';
   }).join('');
