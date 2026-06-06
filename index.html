@@ -1531,7 +1531,11 @@ function renderBuilder() {
     </div>
     <div class="section-title">Add new slide</div>
     <div class="add-slide-row">
-      <input type="text" id="newSlideTitle" placeholder="e.g. 'Event: Young Talent June 2026'">
+      <input type="text" id="newSlideTitle" placeholder="e.g. 'Revenue Summary Q2 2026'">
+      <select id="newSlideLayout" style="padding:9px 12px;font-size:13px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--ink);">
+        <option value="data">Data slide</option>
+        <option value="title">Title / Divider slide</option>
+      </select>
       <button class="btn btn-primary" onclick="addSlide()">+ Add slide</button>
     </div>`;
 }
@@ -1542,13 +1546,16 @@ function renderSlideCard(s, idx) {
   return `<div class="slide-card" id="sc_${s.id}">
     <div class="slide-card-header" id="sh_${s.id}" onclick="toggleSlide('${s.id}')">
       <div style="display:flex;flex-direction:column;gap:2px;margin-right:4px;">
-        <button class="btn-icon-sm" style="padding:1px 5px;font-size:11px;${isFirst ? 'opacity:.3;cursor:default;' : ''}"
-          onclick="event.stopPropagation();${isFirst ? '' : 'moveSlide(\'' + s.id + '\', -1)'}" title="Move up">&#9650;</button>
-        <button class="btn-icon-sm" style="padding:1px 5px;font-size:11px;${isLast ? 'opacity:.3;cursor:default;' : ''}"
-          onclick="event.stopPropagation();${isLast ? '' : 'moveSlide(\'' + s.id + '\', 1)'}" title="Move down">&#9660;</button>
+        <button class="btn-icon-sm" style="padding:1px 5px;font-size:11px;${isFirst ? 'opacity:.3;cursor:default;' : ''}" onclick="event.stopPropagation();${isFirst ? '' : 'moveSlide(\'' + s.id + '\', -1)'}" title="Move up">^</button>
+        <button class="btn-icon-sm" style="padding:1px 5px;font-size:11px;${isLast ? 'opacity:.3;cursor:default;' : ''}" onclick="event.stopPropagation();${isLast ? '' : 'moveSlide(\'' + s.id + '\', 1)'}" title="Move down">v</button>
       </div>
       <div style="font-size:11px;color:var(--ink3);font-weight:500;min-width:20px;">${idx + 1}</div>
       <div class="slide-card-title">${esc(s.title)}</div>
+      <div style="font-size:10px;font-weight:500;padding:2px 8px;border-radius:99px;background:${(s.layout||'data')==='title' ? '#E6F1FB' : 'var(--g-light)'};color:${(s.layout||'data')==='title' ? '#185FA5' : 'var(--gd)'};">${(s.layout||'data')==='title' ? 'Title slide' : 'Data slide'}</div>
+      <select onchange="event.stopPropagation(); changeSlideLayout('${s.id}', this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);">
+        <option value="data"  ${(s.layout||'data')==='data'  ? 'selected' : ''}>Data</option>
+        <option value="title" ${(s.layout||'data')==='title' ? 'selected' : ''}>Title</option>
+      </select>
       <div class="slide-card-count">${s.fields.length} field${s.fields.length !== 1 ? 's' : ''}</div>
       <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); deleteSlide('${s.id}')">Delete</button>
       <span style="color:var(--ink3); font-size:12px">&#8964;</span>
@@ -1564,8 +1571,7 @@ function renderSlideCard(s, idx) {
         ${!s.fields.length ? `<div style="font-size:12px;color:var(--ink3);padding:4px 0">No fields yet -- add one below.</div>` : ''}
       </div>
       <div class="add-field-row">
-        <input type="text" id="fn_${s.id}" placeholder="Field label e.g. 'Event registrations'"
-          onkeydown="if(event.key==='Enter') addField('${s.id}')">
+        <input type="text" id="fn_${s.id}" placeholder="Field label" onkeydown="if(event.key==='Enter') addField('${s.id}')">
         <select id="ft_${s.id}">
           <optgroup label="Manual input">
             <option value="number">Number</option>
@@ -1574,6 +1580,7 @@ function renderSlideCard(s, idx) {
             <option value="currency">Currency (USD)</option>
             <option value="date">Date</option>
             <option value="url">URL</option>
+          <option value="image">Image (URL)</option>
           </optgroup>
           <optgroup label="Live: HubSpot (auto-filled)">
             <option value="hs_contracted">HubSpot: Contracted revenue</option>
@@ -1601,6 +1608,15 @@ function toggleSlide(id) {
   document.getElementById('sh_' + id)?.classList.toggle('open');
 }
 
+async function changeSlideLayout(id, layout) {
+  const s = slides.find(function(sl) { return sl.id === id; });
+  if (!s) return;
+  s.layout = layout;
+  await saveSlide(s);
+  renderBuilder();
+  showToast('Layout updated');
+}
+
 async function moveSlide(id, direction) {
   const idx = slides.findIndex(function(s) { return s.id === id; });
   if (idx === -1) return;
@@ -1624,10 +1640,11 @@ async function moveSlide(id, direction) {
 }
 
 async function addSlide() {
-  const inp = document.getElementById('newSlideTitle');
-  const title = inp.value.trim();
+  const inp    = document.getElementById('newSlideTitle');
+  const layout = document.getElementById('newSlideLayout');
+  const title  = inp.value.trim();
   if (!title) { showToast('Enter a slide title'); return; }
-  const s = { id: uid(), title, fields: [], position: slides.length };
+  const s = { id: uid(), title, fields: [], position: slides.length, layout: layout ? layout.value : 'data' };
   slides.push(s);
   await saveSlide(s);
   inp.value = '';
@@ -1735,6 +1752,11 @@ function renderEntry() {
               ? `<input type="date" id="ef_${f.id}" value="${latest?.data?.[f.id] ?? ''}">`
               : f.type === 'url'
               ? `<input type="url" id="ef_${f.id}" placeholder="https://" value="${esc(latest?.data?.[f.id] ?? '')}">`
+              : f.type === 'image'
+              ? `<div>
+                  <input type="url" id="ef_${f.id}" placeholder="Paste image URL here e.g. https://drive.google.com/..." value="${esc(latest?.data?.[f.id] ?? '')}" style="margin-bottom:6px;">
+                  ${latest?.data?.[f.id] ? `<img src="${esc(latest.data[f.id])}" style="max-width:100%;max-height:160px;border-radius:6px;border:1px solid var(--border);object-fit:cover;" onerror="this.style.display='none'">` : '<div style="font-size:11px;color:var(--ink3);">Image preview will appear here after saving.</div>'}
+                </div>`
               : `<input type="number" id="ef_${f.id}" placeholder="0" value="${latest?.data?.[f.id] ?? ''}">`
             }
           </div>`;
@@ -1927,8 +1949,34 @@ async function buildPresHTML(snapshot) {
 
   return slides.map(function(s, i) {
     const e = latestBySlide[s.id];
+    const layout = s.layout || 'data';
     const hasLiveFields = s.fields.some(function(f){return f.type.startsWith('hs_') || f.type.startsWith('ac_');});
+    const disclaimer = '<div style="margin-top:1.25rem;padding-top:.75rem;border-top:1px solid rgba(255,255,255,.1);font-size:10px;color:rgba(255,255,255,.35);text-align:right;">Designed by Myra via Claude AI</div>';
 
+    // -- Title / Divider slide layout --------------------------
+    if (layout === 'title') {
+      // Find subtitle field if any
+      const subtitleField = s.fields.find(function(f){ return f.label.toLowerCase().includes('subtitle') || f.label.toLowerCase().includes('sub-title'); });
+      const subtitleVal = subtitleField && e && e.data ? (e.data[subtitleField.id] || '') : '';
+      // Other fields shown as small detail lines
+      const detailFields = s.fields.filter(function(f){ return f !== subtitleField; });
+
+      return '<div class="pres-slide" style="min-height:300px;">'
+        + '<div style="background:var(--g);padding:3.5rem 2.5rem;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:300px;">'
+        + '<div style="font-size:10px;color:rgba(255,255,255,.55);letter-spacing:.1em;text-transform:uppercase;margin-bottom:1rem;">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
+        + '<div style="font-size:28px;font-weight:700;color:#fff;line-height:1.3;margin-bottom:' + (subtitleVal ? '1rem' : '.5rem') + ';">' + esc(s.title) + '</div>'
+        + (subtitleVal ? '<div style="font-size:16px;color:rgba(255,255,255,.8);margin-bottom:.5rem;">' + esc(subtitleVal) + '</div>' : '')
+        + (detailFields.length && e ? detailFields.map(function(f) {
+            const isLive = f.type.startsWith('hs_') || f.type.startsWith('ac_');
+            const val = isLive ? resolveLiveField(f.type, live, snapshot) : esc(e.data && e.data[f.id] ? e.data[f.id] : '');
+            return val ? '<div style="font-size:13px;color:rgba(255,255,255,.7);margin-top:4px;">' + val + '</div>' : '';
+          }).join('') : '')
+        + '<div style="margin-top:2.5rem;font-size:10px;color:rgba(255,255,255,.3);">Designed by Myra via Claude AI</div>'
+        + '</div>'
+        + '</div>';
+    }
+
+    // -- Data slide layout (default) ---------------------------
     return '<div class="pres-slide">'
       + '<div class="pres-slide-head">'
       + '<div class="pres-slide-num">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
@@ -1939,9 +1987,22 @@ async function buildPresHTML(snapshot) {
       + (e && e.period ? '<div class="pres-slide-meta" style="margin-bottom:1rem;">Period: ' + esc(e.period) + '</div>' : '')
       + s.fields.map(function(f) {
           const isLive = f.type.startsWith('hs_') || f.type.startsWith('ac_');
+          const rawVal = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+
+          // Image field rendering
+          if (f.type === 'image') {
+            return '<div class="pres-pfield">'
+              + '<div class="pres-pfield-label">' + esc(f.label) + '</div>'
+              + (rawVal
+                ? '<img src="' + esc(rawVal) + '" style="max-width:100%;max-height:280px;border-radius:8px;object-fit:cover;margin-top:4px;" onerror="this.hidden=true">'
+                : '<div class="pres-pfield-empty">No image URL provided.</div>')
+              + '</div>';
+          }
+
           const value = isLive
             ? resolveLiveField(f.type, live, snapshot)
-            : esc(e && e.data && e.data[f.id] ? e.data[f.id] : '--');
+            : esc(rawVal || '--');
+
           return '<div class="pres-pfield">'
             + '<div class="pres-pfield-label">' + esc(f.label) + (isLive ? ' <span style="font-size:9px;padding:1px 5px;border-radius:99px;background:rgba(29,185,84,.2);color:#1db954;font-weight:600;">LIVE</span>' : '') + '</div>'
             + '<div class="pres-pfield-value">' + value + '</div>'
@@ -1949,7 +2010,7 @@ async function buildPresHTML(snapshot) {
         }).join('')
       + (!e && !hasLiveFields ? '<div class="pres-pfield-empty">No data entered yet.</div>' : '')
       + (e ? '<div class="pres-slide-meta" style="margin-top:12px;">Updated ' + fmtTs(e.ts || e.created_at) + ' · ' + esc(e.by) + '</div>' : '')
-      + '<div style="margin-top:1.25rem;padding-top:.75rem;border-top:1px solid rgba(255,255,255,.1);font-size:10px;color:rgba(255,255,255,.35);text-align:right;">Designed by Myra via Claude AI</div>'
+      + disclaimer
       + '</div>'
       + '</div>';
   }).join('');
