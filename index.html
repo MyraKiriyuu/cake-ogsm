@@ -2006,10 +2006,8 @@ async function buildPresHTML(snapshot) {
         const imgUrl = e && e.data && e.data[f.id] ? e.data[f.id] : '';
         if (!imgUrl) return '';
         // Convert Google Drive view links to direct image links
-        const directUrl = imgUrl.replace(
-          /https:\/\/drive\.google\.com\/file\/d\/([^/]+)\/view.*/,
-          'https://drive.google.com/uc?export=view&id=$1'
-        );
+        var gMatch2 = imgUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        const directUrl = gMatch2 ? 'https://drive.google.com/thumbnail?id=' + gMatch2[1] + '&sz=w1000' : imgUrl;
         return '<img src="' + directUrl + '" style="max-width:80%;max-height:220px;border-radius:8px;object-fit:cover;margin-bottom:1rem;" onerror="this.hidden=true">';
       }).join('');
 
@@ -2045,10 +2043,10 @@ async function buildPresHTML(snapshot) {
           // Image field rendering
           if (f.type === 'image') {
             var imgSrc = rawVal;
-            // Auto-convert Google Drive view links to direct image links
-            if (imgSrc && imgSrc.indexOf('drive.google.com/file/d/') >= 0) {
-              var match = imgSrc.match(/drive\.google\.com\/file\/d\/([^/]+)\//);
-              if (match) imgSrc = 'https://drive.google.com/uc?export=view&id=' + match[1];
+            // Auto-convert Google Drive view links to thumbnail format
+            if (imgSrc && imgSrc.indexOf('drive.google.com') >= 0) {
+              var match = imgSrc.match(/\/d\/([a-zA-Z0-9_-]+)/);
+              if (match) imgSrc = 'https://drive.google.com/thumbnail?id=' + match[1] + '&sz=w1000';
             }
             return '<div class="pres-pfield">'
               + '<div class="pres-pfield-label">' + esc(f.label) + '</div>'
