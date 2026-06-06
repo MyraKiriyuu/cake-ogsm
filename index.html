@@ -2255,8 +2255,13 @@ async function buildPresHTML(snapshot) {
 async function openPresentation() {
   document.getElementById('presContent').innerHTML = '<div style="text-align:center;padding:3rem;color:#aaa;">Loading live data...</div>';
   document.getElementById('presOverlay').classList.add('show');
-  const html = await buildPresHTML(false); // false = live mode
-  document.getElementById('presContent').innerHTML = html;
+  try {
+    const html = await buildPresHTML(false);
+    document.getElementById('presContent').innerHTML = html;
+  } catch(err) {
+    console.error('Presentation error:', err);
+    document.getElementById('presContent').innerHTML = '<div style="text-align:center;padding:3rem;color:#e24b4a;">Error loading presentation: ' + err.message + '<br><br><small>Check browser console for details.</small></div>';
+  }
 }
 function closePresentation() {
   document.getElementById('presOverlay').classList.remove('show');
