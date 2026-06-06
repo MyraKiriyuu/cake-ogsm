@@ -482,7 +482,17 @@ async function loadData() {
       _supabase.from('slides').select('*').order('position'),
       _supabase.from('entries').select('*').order('created_at', { ascending: false })
     ]);
-    slides  = (sr.data || []).map(s => ({ ...s, fields: typeof s.fields === 'string' ? JSON.parse(s.fields) : s.fields }));
+    slides  = (sr.data || []).map(s => {
+      const fields = (typeof s.fields === 'string' ? JSON.parse(s.fields) : s.fields) || [];
+      // Auto-migrate: any field with type 'url' that has image-related label -> type 'image'
+      const migratedFields = fields.map(function(f) {
+        if (f.type === 'url' && f.label && f.label.toLowerCase().match(/image|photo|picture|foto/)) {
+          return Object.assign({}, f, { type: 'image' });
+        }
+        return f;
+      });
+      return Object.assign({}, s, { fields: migratedFields });
+    });
     entries = er.data || [];
   } else {
     slides  = lsGet('ogsm_slides')  || [];
@@ -1585,7 +1595,7 @@ function renderSlideCard(s, idx) {
             <option value="currency">Currency (USD)</option>
             <option value="date">Date</option>
             <option value="url">URL</option>
-          <option value="image">Image (URL)</option>
+          <option value="image">Image (upload)</option>
           </optgroup>
           <optgroup label="Live: HubSpot (auto-filled)">
             <option value="hs_contracted">HubSpot: Contracted revenue</option>
