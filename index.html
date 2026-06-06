@@ -1558,12 +1558,28 @@ function renderSlideCard(s) {
         <input type="text" id="fn_${s.id}" placeholder="Field label e.g. 'Event registrations'"
           onkeydown="if(event.key==='Enter') addField('${s.id}')">
         <select id="ft_${s.id}">
-          <option value="number">Number</option>
-          <option value="text">Text</option>
-          <option value="percent">Percent</option>
-          <option value="currency">Currency (USD)</option>
-          <option value="date">Date</option>
-          <option value="url">URL</option>
+          <optgroup label="Manual input">
+            <option value="number">Number</option>
+            <option value="text">Text</option>
+            <option value="percent">Percent</option>
+            <option value="currency">Currency (USD)</option>
+            <option value="date">Date</option>
+            <option value="url">URL</option>
+          </optgroup>
+          <optgroup label="Live: HubSpot (auto-filled)">
+            <option value="hs_contracted">HubSpot: Contracted revenue</option>
+            <option value="hs_payments">HubSpot: Payments received</option>
+            <option value="hs_deals">HubSpot: Deal count</option>
+            <option value="hs_avg_deal">HubSpot: Avg deal size</option>
+            <option value="hs_qoq">HubSpot: QoQ growth</option>
+            <option value="hs_yoy">HubSpot: YoY growth</option>
+            <option value="hs_top_clients">HubSpot: Top clients list</option>
+          </optgroup>
+          <optgroup label="Live: Apply clicks (auto-filled)">
+            <option value="ac_total">Apply clicks: Total</option>
+            <option value="ac_top_companies">Apply clicks: Top companies</option>
+            <option value="ac_events">Apply clicks: Event summary</option>
+          </optgroup>
         </select>
         <button class="btn btn-primary btn-sm" onclick="addField('${s.id}')">+ Add field</button>
       </div>
@@ -1656,8 +1672,31 @@ function renderEntry() {
           <input type="text" id="ef_period" placeholder="Period / event e.g. 'Q2 2026' or 'June Talent Webinar'">
           <input type="text" id="ef_note"   placeholder="Note (optional)">
         </div>
-        ${active.fields.map(f => `
-          <div class="entry-field">
+        ${active.fields.map(f => {
+          const isLive = f.type.startsWith('hs_') || f.type.startsWith('ac_');
+          const liveLabel = {
+            hs_contracted: 'HubSpot: Contracted revenue',
+            hs_payments:   'HubSpot: Payments received',
+            hs_deals:      'HubSpot: Deal count',
+            hs_avg_deal:   'HubSpot: Avg deal size',
+            hs_qoq:        'HubSpot: QoQ growth',
+            hs_yoy:        'HubSpot: YoY growth',
+            hs_top_clients:'HubSpot: Top clients list',
+            ac_total:      'Apply clicks: Total',
+            ac_top_companies: 'Apply clicks: Top companies',
+            ac_events:     'Apply clicks: Event summary',
+          }[f.type] || f.type;
+          if (isLive) {
+            return `<div class="entry-field">
+              <label>${esc(f.label)} <span>(${f.type})</span></label>
+              <div style="padding:8px 12px;background:var(--g-light);border:1px solid var(--g);border-radius:8px;font-size:12px;color:var(--gd);display:flex;align-items:center;gap:8px;">
+                <span style="font-size:16px;">&#9889;</span>
+                <div><strong>Live field</strong> -- ${liveLabel}<br>
+                <span style="font-size:11px;opacity:.8;">This field is auto-filled from live data. No manual input needed.</span></div>
+              </div>
+            </div>`;
+          }
+          return `<div class="entry-field">
             <label>${esc(f.label)} <span>(${f.type})</span></label>
             ${f.type === 'text'
               ? `<textarea id="ef_${f.id}" placeholder="${esc(f.label)}">${latest?.data?.[f.id] ?? ''}</textarea>`
@@ -1667,7 +1706,8 @@ function renderEntry() {
               ? `<input type="url" id="ef_${f.id}" placeholder="https://" value="${esc(latest?.data?.[f.id] ?? '')}">`
               : `<input type="number" id="ef_${f.id}" placeholder="0" value="${latest?.data?.[f.id] ?? ''}">`
             }
-          </div>`).join('')}
+          </div>`;
+        }).join('')}
         ${!active.fields.length ? `<p style="font-size:13px;color:var(--ink3)">No fields defined for this slide yet.</p>` : ''}
         <div class="entry-submit-row">
           <button class="btn btn-primary" onclick="submitEntry()">&#10003; Save entry</button>
@@ -1770,41 +1810,132 @@ async function clearAll() {
 }
 
 // Presentation
-function buildPresHTML() {
+// --- Live field resolver --------------------------------------
+let _liveCache = null;
+
+async function resolveLiveData() {
+  if (_liveCache) return _liveCache;
+  const hs = await loadHubSpotForPeriod();
+  const totalClicks = clickEntries.reduce(function(s,e) { return s + (parseInt(e.apply_clicks || e.applyClicks) || 0); }, 0);
+  const byCompany = {};
+  clickEntries.forEach(function(e) {
+    const co = e.company || 'Unknown';
+    byCompany[co] = (byCompany[co] || 0) + (parseInt(e.apply_clicks || e.applyClicks) || 0);
+  });
+  const topCo = Object.entries(byCompany).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+  const events = clickEntries.filter(function(e){return (e.entry_type||e.type)==='event';});
+
+  _liveCache = { hs, totalClicks, topCo, events };
+  return _liveCache;
+}
+
+function resolveLiveField(type, live, snapshot) {
+  const hs = live ? live.hs : null;
+  if (!hs && type.startsWith('hs_')) return snapshot ? '[No HubSpot data]' : '<span style="color:#aaa;font-style:italic;">No HubSpot data for this period</span>';
+
+  const period = hs ? hs.quarter : '';
+
+  if (type === 'hs_contracted')  return snapshot ? fmtUSD(hs.total_contracted_usd) + ' (' + period + ')' : fmtUSD(hs.total_contracted_usd);
+  if (type === 'hs_payments')    return snapshot ? fmtUSD(hs.total_payments_usd) + ' (' + period + ')' : fmtUSD(hs.total_payments_usd);
+  if (type === 'hs_deals')       return (hs.deal_count || 0) + ' deals';
+  if (type === 'hs_avg_deal')    return fmtUSD(hs.avg_deal_usd);
+  if (type === 'hs_qoq')        return fmtPct(hs.qoq_growth_pct) + (hs.qoq_label ? ' vs ' + hs.qoq_label : '');
+  if (type === 'hs_yoy')        return fmtPct(hs.yoy_growth_pct) + (hs.yoy_label ? ' vs ' + hs.yoy_label : '');
+  if (type === 'hs_top_clients') {
+    if (!hs.top_clients || !hs.top_clients.length) return 'No clients yet';
+    if (snapshot) return hs.top_clients.map(function(c,i){return (i+1)+'. '+c.name+' ('+fmtUSD(c.amount_usd)+')';}).join(' | ');
+    return hs.top_clients.map(function(c,i) {
+      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.1);">'
+        + '<span style="font-size:11px;font-weight:600;color:rgba(255,255,255,.6);width:16px;">' + (i+1) + '</span>'
+        + '<span style="flex:1;font-size:13px;">' + esc(c.name) + '</span>'
+        + '<span style="font-size:13px;font-weight:600;">' + fmtUSD(c.amount_usd) + '</span>'
+        + '</div>';
+    }).join('');
+  }
+  if (type === 'ac_total') return (live.totalClicks || 0).toLocaleString() + ' apply clicks';
+  if (type === 'ac_top_companies') {
+    if (!live.topCo || !live.topCo.length) return 'No data yet';
+    if (snapshot) return live.topCo.map(function(c,i){return (i+1)+'. '+c[0]+' ('+c[1].toLocaleString()+')';}).join(' | ');
+    return live.topCo.map(function(c,i) {
+      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">'
+        + '<span style="font-size:11px;font-weight:600;color:rgba(255,255,255,.6);width:16px;">' + (i+1) + '</span>'
+        + '<span style="flex:1;font-size:13px;">' + esc(c[0]) + '</span>'
+        + '<span style="font-size:13px;font-weight:600;">' + c[1].toLocaleString() + '</span>'
+        + '</div>';
+    }).join('');
+  }
+  if (type === 'ac_events') {
+    if (!live.events || !live.events.length) return 'No events logged yet';
+    if (snapshot) return live.events.map(function(e){ return (e.title||e.company) + ': ' + (e.registrations||0) + ' regs, ' + (e.attendees||0) + ' attended'; }).join(' | ');
+    return live.events.map(function(e) {
+      const regs = parseInt(e.registrations) || 0;
+      const att  = parseInt(e.attendees) || 0;
+      const rate = regs > 0 ? Math.round(att/regs*100) + '%' : '--';
+      return '<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.1);">'
+        + '<div style="font-size:13px;font-weight:500;">' + esc(e.title || e.company) + '</div>'
+        + '<div style="font-size:11px;color:rgba(255,255,255,.65);margin-top:2px;">'
+        + (e.period ? e.period + ' · ' : '')
+        + regs.toLocaleString() + ' registrations · '
+        + att.toLocaleString() + ' attended (' + rate + ')'
+        + '</div></div>';
+    }).join('');
+  }
+  return '--';
+}
+
+async function buildPresHTML(snapshot) {
   const latestBySlide = {};
-  entries.forEach(e => { const id = e.slideId || e.slide_id; if (!latestBySlide[id]) latestBySlide[id] = e; });
-  if (!slides.length) return `<div style="text-align:center;padding:3rem;color:#555">No slides yet.</div>`;
-  return slides.map((s, i) => {
+  entries.forEach(function(e) { const id = e.slideId || e.slide_id; if (!latestBySlide[id]) latestBySlide[id] = e; });
+  if (!slides.length) return '<div style="text-align:center;padding:3rem;color:#555">No slides yet.</div>';
+
+  // Load live data once for all slides
+  _liveCache = null;
+  const live = CONFIGURED ? await resolveLiveData() : null;
+
+  const periodLabel = live && live.hs ? live.hs.quarter : '';
+
+  return slides.map(function(s, i) {
     const e = latestBySlide[s.id];
-    return `<div class="pres-slide">
-      <div class="pres-slide-head">
-        <div class="pres-slide-num">Slide ${i + 1} of ${slides.length}</div>
-        <div class="pres-slide-title">${esc(s.title)}</div>
-      </div>
-      <div class="pres-slide-body">
-        ${e ? `
-          ${e.period ? `<div style="font-size:12px;color:#5a5a58;margin-bottom:1rem">Period: ${esc(e.period)}</div>` : ''}
-          ${s.fields.map(f => `
-            <div class="pres-pfield">
-              <div class="pres-pfield-label">${esc(f.label)}</div>
-              <div class="pres-pfield-value">${esc(e.data?.[f.id]) || '--'}</div>
-            </div>`).join('')}
-          <div class="pres-slide-meta">Updated ${fmtTs(e.ts || e.created_at)} · ${esc(e.by)}</div>
-        ` : `<div class="pres-pfield-empty">No data entered yet.</div>`}
-      </div>
-    </div>`;
+    const hasLiveFields = s.fields.some(function(f){return f.type.startsWith('hs_') || f.type.startsWith('ac_');});
+
+    return '<div class="pres-slide">'
+      + '<div class="pres-slide-head">'
+      + '<div class="pres-slide-num">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
+      + '<div class="pres-slide-title">' + esc(s.title) + '</div>'
+      + (periodLabel && hasLiveFields ? '<div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px;">Period: ' + esc(periodLabel) + '</div>' : '')
+      + '</div>'
+      + '<div class="pres-slide-body">'
+      + (e && e.period ? '<div class="pres-slide-meta" style="margin-bottom:1rem;">Period: ' + esc(e.period) + '</div>' : '')
+      + s.fields.map(function(f) {
+          const isLive = f.type.startsWith('hs_') || f.type.startsWith('ac_');
+          const value = isLive
+            ? resolveLiveField(f.type, live, snapshot)
+            : esc(e && e.data && e.data[f.id] ? e.data[f.id] : '--');
+          return '<div class="pres-pfield">'
+            + '<div class="pres-pfield-label">' + esc(f.label) + (isLive ? ' <span style="font-size:9px;padding:1px 5px;border-radius:99px;background:rgba(29,185,84,.2);color:#1db954;font-weight:600;">LIVE</span>' : '') + '</div>'
+            + '<div class="pres-pfield-value">' + value + '</div>'
+            + '</div>';
+        }).join('')
+      + (!e && !hasLiveFields ? '<div class="pres-pfield-empty">No data entered yet.</div>' : '')
+      + (e ? '<div class="pres-slide-meta" style="margin-top:12px;">Updated ' + fmtTs(e.ts || e.created_at) + ' · ' + esc(e.by) + '</div>' : '')
+      + '</div>'
+      + '</div>';
   }).join('');
 }
 
-function openPresentation() {
-  document.getElementById('presContent').innerHTML = buildPresHTML();
+async function openPresentation() {
+  document.getElementById('presContent').innerHTML = '<div style="text-align:center;padding:3rem;color:#aaa;">Loading live data...</div>';
   document.getElementById('presOverlay').classList.add('show');
+  const html = await buildPresHTML(false); // false = live mode
+  document.getElementById('presContent').innerHTML = html;
 }
 function closePresentation() {
   document.getElementById('presOverlay').classList.remove('show');
 }
 
-function exportHTML() {
+async function exportHTML() {
+  showToast('Preparing export...');
+  const slideHTML = await buildPresHTML(true); // true = snapshot mode
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1839,7 +1970,7 @@ body{font-family:'DM Sans',sans-serif;background:#f5f5f3;padding:2.5rem 1.5rem;c
   <h1>OGSM Presentation</h1>
   <p>Exported ${new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'long', year:'numeric' })}</p>
 </div>
-${buildPresHTML()}
+${slideHTML}
 <div class="footer">Generated by Cake OGSM Platform · ${new Date().getFullYear()}</div>
 </body></html>`;
 
