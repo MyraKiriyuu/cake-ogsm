@@ -664,6 +664,33 @@ function buildPages() {
   ).join('');
 }
 
+// --- Presentation theme ---------------------------------
+let globalTheme = lsGet('ogsm_global_theme') || 'light';
+
+const THEMES = {
+  light: { slideBg:'#ffffff', slideText:'#0f0f0f', headerBg:'#1db954', headerText:'#ffffff', fieldLabel:'#888888', fieldValue:'#0f0f0f', border:'#e5e5e3', meta:'#aaaaaa', disclaimer:'rgba(0,0,0,.2)' },
+  dark:  { slideBg:'#1a1a18', slideText:'#f0f0ee', headerBg:'#111110', headerText:'#f0f0ee', fieldLabel:'#6a6a68', fieldValue:'#f0f0ee', border:'#2a2a28', meta:'#4a4a48', disclaimer:'rgba(255,255,255,.2)' },
+  cake:  { slideBg:'#1db954', slideText:'#ffffff',  headerBg:'#0f6e34', headerText:'#ffffff', fieldLabel:'rgba(255,255,255,.65)', fieldValue:'#ffffff', border:'rgba(255,255,255,.2)', meta:'rgba(255,255,255,.4)', disclaimer:'rgba(255,255,255,.3)' },
+};
+
+function getSlideTheme(s) { return THEMES[s.theme || globalTheme] || THEMES.light; }
+
+function setGlobalTheme(t) {
+  globalTheme = t;
+  lsSet('ogsm_global_theme', t);
+  renderBuilder();
+  showToast('Global theme set to ' + t);
+}
+
+async function setSlideTheme(id, t) {
+  const s = slides.find(function(sl){ return sl.id === id; });
+  if (!s) return;
+  s.theme = t === 'global' ? null : t;
+  await saveSlide(s);
+  renderBuilder();
+  showToast('Slide theme updated');
+}
+
 // --- Apply clicks state ----------------------------------------
 let clickEntries   = [];
 let clickEntryType = 'event'; // 'event' or 'job'
@@ -1542,6 +1569,17 @@ function renderBuilder() {
       ${slides.map(function(s, i) { return renderSlideCard(s, i); }).join('')}
       ${!slides.length ? `<div class="empty-state"><div class="empty-state-text">No slides yet.</div></div>` : ''}
     </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:1.25rem;padding:10px 14px;background:var(--color-background-secondary, var(--surface));border-radius:var(--radius);border:1px solid var(--border);">
+      <div>
+        <div style="font-size:13px;font-weight:500;color:var(--ink);">Global presentation theme</div>
+        <div style="font-size:11px;color:var(--ink3);">Applied to all slides unless overridden per-slide above</div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="setGlobalTheme('light')" style="padding:6px 14px;font-size:12px;font-weight:500;border-radius:7px;border:1px solid var(--border);cursor:pointer;background:${globalTheme==='light' ? '#1db954' : 'var(--card)'};color:${globalTheme==='light' ? '#fff' : 'var(--ink)'};">Light</button>
+        <button onclick="setGlobalTheme('dark')"  style="padding:6px 14px;font-size:12px;font-weight:500;border-radius:7px;border:1px solid var(--border);cursor:pointer;background:${globalTheme==='dark'  ? '#1db954' : 'var(--card)'};color:${globalTheme==='dark'  ? '#fff' : 'var(--ink)'};">Dark</button>
+        <button onclick="setGlobalTheme('cake')"  style="padding:6px 14px;font-size:12px;font-weight:500;border-radius:7px;border:1px solid var(--border);cursor:pointer;background:${globalTheme==='cake'  ? '#1db954' : 'var(--card)'};color:${globalTheme==='cake'  ? '#fff' : 'var(--ink)'};">Cake Green</button>
+      </div>
+    </div>
     <div class="section-title">Add new slide</div>
     <div class="add-slide-row">
       <input type="text" id="newSlideTitle" placeholder="e.g. 'Revenue Summary Q2 2026'">
@@ -1571,6 +1609,12 @@ function renderSlideCard(s, idx) {
         <option value="data"  ${(s.layout||'data')==='data'  ? 'selected' : ''}>Data</option>
         <option value="title" ${(s.layout||'data')==='title' ? 'selected' : ''}>Title</option>
       </select>
+      <select onchange="event.stopPropagation(); setSlideTheme('${s.id}', this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);" title="Slide theme">
+        <option value="global" ${!s.theme ? 'selected' : ''}>Theme: Global</option>
+        <option value="light"  ${s.theme==='light'  ? 'selected' : ''}>Light</option>
+        <option value="dark"   ${s.theme==='dark'   ? 'selected' : ''}>Dark</option>
+        <option value="cake"   ${s.theme==='cake'   ? 'selected' : ''}>Cake Green</option>
+      </select>
       <div class="slide-card-count">${s.fields.length} field${s.fields.length !== 1 ? 's' : ''}</div>
       <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); deleteSlide('${s.id}')">Delete</button>
       <span style="color:var(--ink3); font-size:12px">&#8964;</span>
@@ -1579,7 +1623,9 @@ function renderSlideCard(s, idx) {
       <div class="field-pill-list">
         ${s.fields.map(f => `
           <div class="field-pill">
-            <div class="field-pill-label">${esc(f.label)}</div>
+            <div class="field-pill-label" style="cursor:text;" title="Click to edit label"
+              onclick="event.stopPropagation();startEditFieldLabel('${s.id}','${f.id}',this)"
+              id="fl_label_${f.id}">${esc(f.label)}</div>
             <div class="field-pill-type">${f.type}</div>
             <button class="btn-icon-sm" onclick="deleteField('${s.id}', '${f.id}')">&#10005;</button>
           </div>`).join('')}
@@ -1651,6 +1697,40 @@ async function saveEditTitle(id, newTitle, el) {
   await saveSlide(s);
   renderEntry();
   showToast('Title updated');
+}
+
+function startEditFieldLabel(slideId, fieldId, el) {
+  const s = slides.find(function(sl){ return sl.id === slideId; });
+  if (!s) return;
+  const f = s.fields.find(function(fi){ return fi.id === fieldId; });
+  if (!f) return;
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.value = f.label;
+  inp.style.cssText = 'width:100%;padding:2px 6px;font-size:12px;border:1px solid var(--g);border-radius:4px;background:var(--card);color:var(--ink);';
+  inp.onblur = function() { saveFieldLabel(slideId, fieldId, inp.value, el); };
+  inp.onkeydown = function(e) {
+    if (e.key === 'Enter') inp.blur();
+    if (e.key === 'Escape') { el.textContent = f.label; }
+  };
+  el.textContent = '';
+  el.appendChild(inp);
+  inp.focus();
+  inp.select();
+}
+
+async function saveFieldLabel(slideId, fieldId, newLabel, el) {
+  const s = slides.find(function(sl){ return sl.id === slideId; });
+  if (!s) return;
+  const f = s.fields.find(function(fi){ return fi.id === fieldId; });
+  if (!f) return;
+  const label = newLabel.trim();
+  if (!label) { el.textContent = f.label; return; }
+  f.label = label;
+  el.textContent = label;
+  await saveSlide(s);
+  renderEntry();
+  showToast('Field label updated');
 }
 
 async function changeSlideLayout(id, layout) {
@@ -1800,22 +1880,24 @@ function renderEntry() {
               : f.type === 'image'
               ? `<div>
                   <div style="font-size:12px;color:var(--ink2);margin-bottom:8px;line-height:1.6;">
-                    Upload an image from your device. It will be stored securely and only visible to signed-in team members.
+                    Upload one or more images. They are stored securely and only visible to signed-in team members.
                   </div>
                   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
                     <label style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;font-size:12px;font-weight:500;border-radius:8px;border:1px solid var(--g);background:var(--g-light);color:var(--gd);cursor:pointer;">
-                      Upload image
-                      <input type="file" accept="image/*" style="display:none;" onchange="uploadSlideImage(this, '${f.id}', '${active.id}')">
+                      + Add image(s)
+                      <input type="file" accept="image/*" multiple style="display:none;" onchange="uploadSlideImage(this, '${f.id}', '${active.id}')">
                     </label>
                     <span id="img_status_${f.id}" style="font-size:11px;color:var(--ink3);"></span>
                   </div>
-                  ${latest?.data?.[f.id] ? `
-                    <div style="position:relative;display:inline-block;">
-                      <img id="img_prev_${f.id}" src="${esc(latest.data[f.id])}" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--border);object-fit:cover;" onerror="this.hidden=true">
-                      <button onclick="clearSlideImage('${f.id}', '${active.id}')" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:99px;width:22px;height:22px;font-size:12px;cursor:pointer;line-height:1;" title="Remove image">x</button>
-                    </div>
-                  ` : '<div id="img_prev_${f.id}"></div>'}
-                  <input type="hidden" id="ef_${f.id}" value="${esc(latest?.data?.[f.id] ?? '')}">
+                  <div id="img_prev_${f.id}" style="display:flex;flex-wrap:wrap;gap:8px;">
+                    ${(latest?.data?.[f.id] ? (Array.isArray(JSON.parse(latest.data[f.id] || '[]')) ? JSON.parse(latest.data[f.id]) : [latest.data[f.id]]) : []).map((url, idx) =>
+                      url ? '<div style="position:relative;display:inline-block;">'
+                        + '<img src="' + esc(url) + '" style="width:120px;height:90px;border-radius:8px;border:1px solid var(--border);object-fit:cover;" onerror="this.hidden=true">'
+                        + '<button onclick="removeSlideImage(\'' + f.id + '\', ' + idx + ')" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:99px;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:1;">x</button>'
+                        + '</div>' : ''
+                    ).join('')}
+                  </div>
+                  <input type="hidden" id="ef_${f.id}" value="${esc(latest?.data?.[f.id] ?? '[]')}">
                 </div>`
               : `<input type="number" id="ef_${f.id}" placeholder="0" value="${latest?.data?.[f.id] ?? ''}">`
             }
@@ -1834,62 +1916,69 @@ function selectSlide(id) { activeSlideId = id; renderEntry(); }
 
 // ─── Supabase image upload ─────────────────────────────────────
 async function uploadSlideImage(input, fieldId, slideId) {
-  const file = input.files[0];
-  if (!file) return;
+  const files = Array.from(input.files);
+  if (!files.length) return;
 
   const statusEl = document.getElementById('img_status_' + fieldId);
   const hiddenEl = document.getElementById('ef_' + fieldId);
   const prevEl   = document.getElementById('img_prev_' + fieldId);
 
-  if (statusEl) statusEl.textContent = 'Uploading...';
+  if (statusEl) statusEl.textContent = 'Uploading ' + files.length + ' image(s)...';
 
-  // Max 10MB check
-  if (file.size > 10 * 1024 * 1024) {
-    if (statusEl) statusEl.textContent = 'File too large. Max 10MB.';
-    return;
+  // Get existing URLs
+  var existing = [];
+  try { existing = JSON.parse(hiddenEl ? hiddenEl.value || '[]' : '[]'); } catch(e) { existing = []; }
+  if (!Array.isArray(existing)) existing = existing ? [existing] : [];
+
+  var uploaded = 0;
+  for (var fi = 0; fi < files.length; fi++) {
+    var file = files[fi];
+    if (file.size > 10 * 1024 * 1024) {
+      if (statusEl) statusEl.textContent = file.name + ' too large (max 10MB), skipped.';
+      continue;
+    }
+    try {
+      var ext      = file.name.split('.').pop();
+      var fileName = slideId + '_' + fieldId + '_' + Date.now() + '_' + fi + '.' + ext;
+      var upResult = await _supabase.storage.from('ogsm-images').upload(fileName, file, { upsert: true, contentType: file.type });
+      if (upResult.error) { console.error(upResult.error); continue; }
+      var signResult = await _supabase.storage.from('ogsm-images').createSignedUrl(fileName, 60 * 60 * 24 * 365 * 10);
+      var url = signResult.data && signResult.data.signedUrl ? signResult.data.signedUrl : '';
+      if (url) { existing.push(url); uploaded++; }
+    } catch(e) { console.error(e); }
   }
 
-  try {
-    const ext      = file.name.split('.').pop();
-    const fileName = slideId + '_' + fieldId + '_' + Date.now() + '.' + ext;
+  if (hiddenEl) hiddenEl.value = JSON.stringify(existing);
+  if (statusEl) statusEl.textContent = uploaded + ' image(s) uploaded';
+  setTimeout(function() { if (statusEl) statusEl.textContent = ''; }, 3000);
 
-    const { data, error } = await _supabase.storage
-      .from('ogsm-images')
-      .upload(fileName, file, { upsert: true, contentType: file.type });
-
-    if (error) {
-      if (statusEl) statusEl.textContent = 'Upload failed: ' + error.message;
-      return;
-    }
-
-    // Get signed URL valid for 10 years
-    const { data: signedData } = await _supabase.storage
-      .from('ogsm-images')
-      .createSignedUrl(fileName, 60 * 60 * 24 * 365 * 10);
-
-    const url = signedData?.signedUrl || '';
-
-    // Update hidden input and preview
-    if (hiddenEl) hiddenEl.value = url;
-    if (prevEl) {
-      prevEl.innerHTML = '<div style="position:relative;display:inline-block;">'
-        + '<img src="' + url + '" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--border);object-fit:cover;">'
-        + '<button onclick="clearSlideImage(' + JSON.stringify(fieldId) + ', ' + JSON.stringify(slideId) + ')" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:99px;width:22px;height:22px;font-size:12px;cursor:pointer;line-height:1;" title="Remove image">x</button>'
-        + '</div>';
-    }
-    if (statusEl) statusEl.textContent = 'Uploaded successfully';
-    setTimeout(function() { if (statusEl) statusEl.textContent = ''; }, 3000);
-
-  } catch(e) {
-    if (statusEl) statusEl.textContent = 'Upload error: ' + e.message;
+  // Refresh preview grid
+  if (prevEl) {
+    prevEl.innerHTML = existing.map(function(url, idx) {
+      return url ? '<div style="position:relative;display:inline-block;">'
+        + '<img src="' + url + '" style="width:120px;height:90px;border-radius:8px;border:1px solid var(--border);object-fit:cover;" onerror="this.hidden=true">'
+        + '<button onclick="removeSlideImage(' + JSON.stringify(fieldId) + ',' + idx + ')" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:99px;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:1;">x</button>'
+        + '</div>' : '';
+    }).join('');
   }
 }
 
-async function clearSlideImage(fieldId, slideId) {
+function removeSlideImage(fieldId, idx) {
   const hiddenEl = document.getElementById('ef_' + fieldId);
   const prevEl   = document.getElementById('img_prev_' + fieldId);
-  if (hiddenEl) hiddenEl.value = '';
-  if (prevEl) prevEl.innerHTML = '';
+  var urls = [];
+  try { urls = JSON.parse(hiddenEl ? hiddenEl.value || '[]' : '[]'); } catch(e) { urls = []; }
+  if (!Array.isArray(urls)) urls = urls ? [urls] : [];
+  urls.splice(idx, 1);
+  if (hiddenEl) hiddenEl.value = JSON.stringify(urls);
+  if (prevEl) {
+    prevEl.innerHTML = urls.map(function(url, i) {
+      return url ? '<div style="position:relative;display:inline-block;">'
+        + '<img src="' + url + '" style="width:120px;height:90px;border-radius:8px;border:1px solid var(--border);object-fit:cover;" onerror="this.hidden=true">'
+        + '<button onclick="removeSlideImage(' + JSON.stringify(fieldId) + ',' + i + ')" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:99px;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:1;">x</button>'
+        + '</div>' : '';
+    }).join('');
+  }
 }
 
 async function submitEntry() {
@@ -2071,7 +2160,7 @@ async function buildPresHTML(snapshot) {
     const e = latestBySlide[s.id];
     const layout = s.layout || 'data';
     const hasLiveFields = s.fields.some(function(f){return f.type.startsWith('hs_') || f.type.startsWith('ac_');});
-    const disclaimer = '<div style="margin-top:1.25rem;padding-top:.75rem;border-top:1px solid rgba(255,255,255,.1);font-size:10px;color:rgba(255,255,255,.35);text-align:right;">Designed by Myra via Claude AI</div>';
+    const disclaimer = '<div style="margin-top:1.25rem;padding-top:.75rem;border-top:1px solid ' + t.border + ';font-size:10px;color:' + t.disclaimer + ';text-align:right;">Designed by Myra via Claude AI</div>';
 
     // -- Title / Divider slide layout --------------------------
     if (layout === 'title') {
@@ -2114,27 +2203,36 @@ async function buildPresHTML(snapshot) {
     }
 
     // -- Data slide layout (default) ---------------------------
-    return '<div class="pres-slide">'
-      + '<div class="pres-slide-head">'
-      + '<div class="pres-slide-num">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
-      + '<div class="pres-slide-title">' + esc(s.title) + '</div>'
-      + (periodLabel && hasLiveFields ? '<div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px;">Period: ' + esc(periodLabel) + '</div>' : '')
+    var t = getSlideTheme(s);
+    return '<div class="pres-slide" style="background:' + t.slideBg + ';border-color:' + t.border + ';">'
+      + '<div class="pres-slide-head" style="background:' + t.headerBg + ';">'
+      + '<div class="pres-slide-num" style="color:' + t.meta + '">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
+      + '<div class="pres-slide-title" style="color:' + t.headerText + '">' + esc(s.title) + '</div>'
+      + (periodLabel && hasLiveFields ? '<div style="font-size:11px;color:' + t.meta + ';margin-top:2px;">Period: ' + esc(periodLabel) + '</div>' : '')
       + '</div>'
       + '<div class="pres-slide-body">'
-      + (e && e.period ? '<div class="pres-slide-meta" style="margin-bottom:1rem;">Period: ' + esc(e.period) + '</div>' : '')
+      + (e && e.period ? '<div class="pres-slide-meta" style="margin-bottom:1rem;color:' + t.meta + '">Period: ' + esc(e.period) + '</div>' : '')
       + s.fields.map(function(f) {
           const isLive = f.type.startsWith('hs_') || f.type.startsWith('ac_');
           const rawVal = e && e.data && e.data[f.id] ? e.data[f.id] : '';
 
-          // Image field rendering
+          // Image field rendering (supports multiple images as JSON array)
           if (f.type === 'image') {
-            var imgSrc = rawVal;
-            return '<div class="pres-pfield">'
-              + '<div class="pres-pfield-label">' + esc(f.label) + '</div>'
-              + (imgSrc
-                ? '<img src="' + imgSrc + '" style="max-width:100%;max-height:280px;border-radius:8px;object-fit:cover;margin-top:4px;" onerror="this.hidden=true">'
-                : '<div class="pres-pfield-empty">No image uploaded yet.</div>')
-              + '</div>';
+            var imgUrls = [];
+            try {
+              var parsed = JSON.parse(rawVal || '[]');
+              imgUrls = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
+            } catch(err) { imgUrls = rawVal ? [rawVal] : []; }
+            var imgGrid = imgUrls.length
+              ? '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">'
+                + imgUrls.map(function(url) {
+                    return url ? '<img src="' + url + '" style="max-height:200px;max-width:calc(50% - 4px);border-radius:8px;object-fit:cover;flex:1;min-width:120px;" onerror="this.hidden=true">' : '';
+                  }).join('')
+                + '</div>'
+              : '<div class="pres-pfield-empty">No images uploaded yet.</div>';
+            return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';">'
+              + '<div class="pres-pfield-label" style="color:' + t.fieldLabel + ';">' + esc(f.label) + '</div>'
+              + imgGrid + '</div>';
           }
 
           const value = isLive
@@ -2143,11 +2241,11 @@ async function buildPresHTML(snapshot) {
 
           return '<div class="pres-pfield">'
             + '<div class="pres-pfield-label">' + esc(f.label) + (isLive ? ' <span style="font-size:9px;padding:1px 5px;border-radius:99px;background:rgba(29,185,84,.2);color:#1db954;font-weight:600;">LIVE</span>' : '') + '</div>'
-            + '<div class="pres-pfield-value">' + value + '</div>'
+            + '<div class="pres-pfield-value" style="color:' + t.fieldValue + ';">' + value + '</div>'
             + '</div>';
         }).join('')
       + (!e && !hasLiveFields ? '<div class="pres-pfield-empty">No data entered yet.</div>' : '')
-      + (e ? '<div class="pres-slide-meta" style="margin-top:12px;">Updated ' + fmtTs(e.ts || e.created_at) + ' · ' + esc(e.by) + '</div>' : '')
+      + (e ? '<div class="pres-slide-meta" style="margin-top:12px;color:' + t.meta + ';">Updated ' + fmtTs(e.ts || e.created_at) + ' · ' + esc(e.by) + '</div>' : '')
       + disclaimer
       + '</div>'
       + '</div>';
