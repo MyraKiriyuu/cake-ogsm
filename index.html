@@ -1550,7 +1550,9 @@ function renderSlideCard(s, idx) {
         <button class="btn-icon-sm" style="padding:1px 5px;font-size:11px;${isLast ? 'opacity:.3;cursor:default;' : ''}" onclick="event.stopPropagation();${isLast ? '' : 'moveSlide(\'' + s.id + '\', 1)'}" title="Move down">v</button>
       </div>
       <div style="font-size:11px;color:var(--ink3);font-weight:500;min-width:20px;">${idx + 1}</div>
-      <div class="slide-card-title">${esc(s.title)}</div>
+      <div class="slide-card-title" style="cursor:text;" title="Click to edit title"
+        onclick="event.stopPropagation(); startEditTitle('${s.id}', this)"
+        id="st_${s.id}">${esc(s.title)}</div>
       <div style="font-size:10px;font-weight:500;padding:2px 8px;border-radius:99px;background:${(s.layout||'data')==='title' ? '#E6F1FB' : 'var(--g-light)'};color:${(s.layout||'data')==='title' ? '#185FA5' : 'var(--gd)'};">${(s.layout||'data')==='title' ? 'Title slide' : 'Data slide'}</div>
       <select onchange="event.stopPropagation(); changeSlideLayout('${s.id}', this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);">
         <option value="data"  ${(s.layout||'data')==='data'  ? 'selected' : ''}>Data</option>
@@ -1606,6 +1608,36 @@ function renderSlideCard(s, idx) {
 function toggleSlide(id) {
   document.getElementById('sb_' + id)?.classList.toggle('open');
   document.getElementById('sh_' + id)?.classList.toggle('open');
+}
+
+function startEditTitle(id, el) {
+  const s = slides.find(function(sl){ return sl.id === id; });
+  if (!s) return;
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.value = s.title;
+  inp.style.cssText = 'width:100%;padding:2px 6px;font-size:13px;font-weight:600;border:1px solid var(--g);border-radius:4px;background:var(--card);color:var(--ink);';
+  inp.onblur = function() { saveEditTitle(id, inp.value, el); };
+  inp.onkeydown = function(e) {
+    if (e.key === 'Enter') inp.blur();
+    if (e.key === 'Escape') { el.textContent = s.title; }
+  };
+  el.textContent = '';
+  el.appendChild(inp);
+  inp.focus();
+  inp.select();
+}
+
+async function saveEditTitle(id, newTitle, el) {
+  const s = slides.find(function(sl){ return sl.id === id; });
+  if (!s) return;
+  const title = newTitle.trim();
+  if (!title) { el.textContent = s.title; return; }
+  s.title = title;
+  el.textContent = title;
+  await saveSlide(s);
+  renderEntry();
+  showToast('Title updated');
 }
 
 async function changeSlideLayout(id, layout) {
@@ -1956,21 +1988,42 @@ async function buildPresHTML(snapshot) {
     // -- Title / Divider slide layout --------------------------
     if (layout === 'title') {
       // Find subtitle field if any
-      const subtitleField = s.fields.find(function(f){ return f.label.toLowerCase().includes('subtitle') || f.label.toLowerCase().includes('sub-title'); });
+      const subtitleField = s.fields.find(function(f){
+        return f.label.toLowerCase().includes('subtitle') || f.label.toLowerCase().includes('sub-title');
+      });
       const subtitleVal = subtitleField && e && e.data ? (e.data[subtitleField.id] || '') : '';
-      // Other fields shown as small detail lines
-      const detailFields = s.fields.filter(function(f){ return f !== subtitleField; });
+
+      // Image fields
+      const imageFields = s.fields.filter(function(f){ return f.type === 'image'; });
+
+      // Other text/detail fields (not subtitle, not image, not live)
+      const detailFields = s.fields.filter(function(f){
+        return f !== subtitleField && f.type !== 'image';
+      });
+
+      // Build image HTML
+      var imageHTML = imageFields.map(function(f) {
+        const imgUrl = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+        if (!imgUrl) return '';
+        // Convert Google Drive view links to direct image links
+        const directUrl = imgUrl.replace(
+          /https:\/\/drive\.google\.com\/file\/d\/([^/]+)\/view.*/,
+          'https://drive.google.com/uc?export=view&id=$1'
+        );
+        return '<img src="' + directUrl + '" style="max-width:80%;max-height:220px;border-radius:8px;object-fit:cover;margin-bottom:1rem;" onerror="this.hidden=true">';
+      }).join('');
 
       return '<div class="pres-slide" style="min-height:300px;">'
         + '<div style="background:var(--g);padding:3.5rem 2.5rem;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:300px;">'
         + '<div style="font-size:10px;color:rgba(255,255,255,.55);letter-spacing:.1em;text-transform:uppercase;margin-bottom:1rem;">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
+        + imageHTML
         + '<div style="font-size:28px;font-weight:700;color:#fff;line-height:1.3;margin-bottom:' + (subtitleVal ? '1rem' : '.5rem') + ';">' + esc(s.title) + '</div>'
         + (subtitleVal ? '<div style="font-size:16px;color:rgba(255,255,255,.8);margin-bottom:.5rem;">' + esc(subtitleVal) + '</div>' : '')
-        + (detailFields.length && e ? detailFields.map(function(f) {
+        + (detailFields.length && e ? '<div style="margin-top:1rem;">' + detailFields.map(function(f) {
             const isLive = f.type.startsWith('hs_') || f.type.startsWith('ac_');
-            const val = isLive ? resolveLiveField(f.type, live, snapshot) : esc(e.data && e.data[f.id] ? e.data[f.id] : '');
-            return val ? '<div style="font-size:13px;color:rgba(255,255,255,.7);margin-top:4px;">' + val + '</div>' : '';
-          }).join('') : '')
+            const val = isLive ? resolveLiveField(f.type, live, snapshot) : esc(e && e.data && e.data[f.id] ? e.data[f.id] : '');
+            return val ? '<div style="font-size:13px;color:rgba(255,255,255,.75);margin-top:6px;">' + esc(f.label) + ': ' + val + '</div>' : '';
+          }).join('') + '</div>' : '')
         + '<div style="margin-top:2.5rem;font-size:10px;color:rgba(255,255,255,.3);">Designed by Myra via Claude AI</div>'
         + '</div>'
         + '</div>';
@@ -1991,10 +2044,16 @@ async function buildPresHTML(snapshot) {
 
           // Image field rendering
           if (f.type === 'image') {
+            var imgSrc = rawVal;
+            // Auto-convert Google Drive view links to direct image links
+            if (imgSrc && imgSrc.indexOf('drive.google.com/file/d/') >= 0) {
+              var match = imgSrc.match(/drive\.google\.com\/file\/d\/([^/]+)\//);
+              if (match) imgSrc = 'https://drive.google.com/uc?export=view&id=' + match[1];
+            }
             return '<div class="pres-pfield">'
               + '<div class="pres-pfield-label">' + esc(f.label) + '</div>'
-              + (rawVal
-                ? '<img src="' + esc(rawVal) + '" style="max-width:100%;max-height:280px;border-radius:8px;object-fit:cover;margin-top:4px;" onerror="this.hidden=true">'
+              + (imgSrc
+                ? '<img src="' + imgSrc + '" style="max-width:100%;max-height:280px;border-radius:8px;object-fit:cover;margin-top:4px;" onerror="this.hidden=true">'
                 : '<div class="pres-pfield-empty">No image URL provided.</div>')
               + '</div>';
           }
