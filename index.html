@@ -673,7 +673,10 @@ const THEMES = {
   cake:  { slideBg:'#1db954', slideText:'#ffffff',  headerBg:'#0f6e34', headerText:'#ffffff', fieldLabel:'rgba(255,255,255,.65)', fieldValue:'#ffffff', border:'rgba(255,255,255,.2)', meta:'rgba(255,255,255,.4)', disclaimer:'rgba(255,255,255,.3)' },
 };
 
-function getSlideTheme(s) { return THEMES[s.theme || globalTheme] || THEMES.light; }
+function getSlideTheme(s) {
+  var key = s.theme || globalTheme || 'light';
+  return THEMES[key] || THEMES[globalTheme] || THEMES.light;
+}
 
 function setGlobalTheme(t) {
   globalTheme = t;
@@ -2157,6 +2160,7 @@ async function buildPresHTML(snapshot) {
   const periodLabel = live && live.hs ? live.hs.quarter : '';
 
   return slides.map(function(s, i) {
+    var t = getSlideTheme(s);
     const e = latestBySlide[s.id];
     const layout = s.layout || 'data';
     const hasLiveFields = s.fields.some(function(f){return f.type.startsWith('hs_') || f.type.startsWith('ac_');});
@@ -2203,7 +2207,6 @@ async function buildPresHTML(snapshot) {
     }
 
     // -- Data slide layout (default) ---------------------------
-    var t = getSlideTheme(s);
     return '<div class="pres-slide" style="background:' + t.slideBg + ';border-color:' + t.border + ';">'
       + '<div class="pres-slide-head" style="background:' + t.headerBg + ';">'
       + '<div class="pres-slide-num" style="color:' + t.meta + '">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
