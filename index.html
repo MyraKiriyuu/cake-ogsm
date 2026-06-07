@@ -325,12 +325,31 @@ input, select, textarea { font-family: var(--font); }
 
   <!-- PRESENTATION OVERLAY -->
   <div class="pres-overlay" id="presOverlay">
-    <div class="pres-bar">
-      <div class="pres-bar-title">OGSM Presentation · Cake Indonesia</div>
+    <div class="pres-bar" style="height:auto;padding:.75rem 1.25rem;flex-wrap:wrap;gap:8px;">
+      <div class="pres-bar-title">OGSM &middot; Cake Indonesia</div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;" id="presPeriodBar">
+        <span style="font-size:11px;color:#6a6a68;">HubSpot period:</span>
+        <select id="pres_mode" onchange="updatePresMode(this.value)" style="padding:4px 8px;font-size:11px;border:1px solid #3a3a38;border-radius:6px;background:#2a2a28;color:#c0c0bc;">
+          <option value="quarter">Quarter</option>
+          <option value="semester">Semester</option>
+          <option value="month">Month</option>
+          <option value="all">All time</option>
+        </select>
+        <select id="pres_period" onchange="hsPeriodVal=parseInt(this.value);refreshPresentation()" style="padding:4px 8px;font-size:11px;border:1px solid #3a3a38;border-radius:6px;background:#2a2a28;color:#c0c0bc;">
+          <option value="1">Q1</option>
+          <option value="2">Q2</option>
+          <option value="3">Q3</option>
+          <option value="4">Q4</option>
+        </select>
+        <select id="pres_year" onchange="hsYear=parseInt(this.value);refreshPresentation()" style="padding:4px 8px;font-size:11px;border:1px solid #3a3a38;border-radius:6px;background:#2a2a28;color:#c0c0bc;">
+          <option value="2026">2026</option>
+          <option value="2025">2025</option>
+          <option value="2024">2024</option>
+        </select>
+      </div>
       <div class="pres-bar-right">
-        <button class="pres-btn" id="editModeBtn" onclick="toggleEditMode()">&#9998; Edit: Off</button>
-        <button class="pres-btn pres-btn-green" onclick="exportHTML()">↓ Export HTML</button>
-        <button class="pres-btn" onclick="closePresentation()">✕ Close</button>
+        <button class="pres-btn pres-btn-green" onclick="exportHTML()">&#8659; Export</button>
+        <button class="pres-btn" onclick="closePresentation()">&#10005; Close</button>
       </div>
     </div>
     <div class="pres-scroll" id="presContent"></div>
@@ -2567,19 +2586,6 @@ async function buildPresHTML(snapshot) {
             : (f.type === 'text' ? escNL(rawVal || '--') : esc(rawVal || '--'));
 
 
-          // Edit mode
-          if (presEditMode && !isLive && !snapshot && f.type !== 'image') {
-            var sid2 = s.id.replace(/'/g, '');
-            var fid2 = f.id.replace(/'/g, '');
-            var editEl2 = f.type === 'text'
-              ? '<textarea onblur="savePresEdit(\'' + sid2 + '\',\'' + fid2 + '\',this.value)" style="width:100%;font-size:15px;font-weight:500;color:' + t.fieldValue + ';background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:6px 8px;resize:vertical;min-height:60px;font-family:inherit;">' + esc(rawVal) + '</textarea>'
-              : '<input type="' + (f.type === 'date' ? 'date' : 'text') + '" value="' + esc(rawVal) + '" onblur="savePresEdit(\'' + sid2 + '\',\'' + fid2 + '\',this.value)" style="width:100%;font-size:15px;font-weight:500;color:' + t.fieldValue + ';background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:6px 8px;font-family:inherit;">';
-            return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';">'
-              + '<div class="pres-pfield-label" style="color:' + t.fieldLabel + ';font-size:10px;margin-bottom:4px;">' + esc(f.label) + ' <span style="opacity:.5;font-style:italic;">click to edit</span></div>'
-              + editEl2
-              + '</div>';
-          }
-
             + '<div class="pres-pfield-label">' + esc(f.label) + (isLive ? ' <span style="font-size:9px;padding:1px 5px;border-radius:99px;background:rgba(29,185,84,.2);color:#1db954;font-weight:600;">LIVE</span>' : '') + '</div>'
             + '<div class="pres-pfield-value" style="color:' + t.fieldValue + ';">' + value + '</div>'
             + '</div>';
@@ -2592,47 +2598,57 @@ async function buildPresHTML(snapshot) {
   }).join('');
 }
 
-// ─── Presentation edit mode ───────────────────────────────────
-let presEditMode = false;
-
-function toggleEditMode() {
-  presEditMode = !presEditMode;
-  const btn = document.getElementById('editModeBtn');
-  if (btn) {
-    btn.textContent = presEditMode ? 'Done editing' : '&#9998; Edit: Off';
-    btn.innerHTML  = presEditMode ? '&#10003; Done editing' : '&#9998; Edit: Off';
-    btn.style.background = presEditMode ? '#1db954' : 'transparent';
-    btn.style.color      = presEditMode ? '#fff'    : '#c0c0bc';
-    btn.style.borderColor= presEditMode ? '#1db954' : '#3a3a38';
+function updatePresMode(mode) {
+  hsPeriodMode = mode;
+  hsPeriodVal  = 1;
+  // Update period dropdown options based on mode
+  const periodSel = document.getElementById('pres_period');
+  const yearSel   = document.getElementById('pres_year');
+  if (!periodSel) { refreshPresentation(); return; }
+  if (mode === 'all') {
+    periodSel.style.display = 'none';
+    yearSel.style.display   = 'none';
+  } else {
+    periodSel.style.display = '';
+    yearSel.style.display   = '';
+    periodSel.innerHTML = mode === 'quarter'
+      ? '<option value="1">Q1</option><option value="2">Q2</option><option value="3">Q3</option><option value="4">Q4</option>'
+      : mode === 'semester'
+      ? '<option value="1">H1</option><option value="2">H2</option>'
+      : ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+          .map(function(m,i){ return '<option value="' + (i+1) + '">' + m + '</option>'; }).join('');
+    periodSel.value = '1';
   }
-  // Re-render presentation with/without edit overlays
-  openPresentation();
+  refreshPresentation();
 }
 
-async function savePresEdit(slideId, fieldId, newValue) {
-  // Find the most recent entry for this slide
-  const existing = entries.find(function(e){ return (e.slideId || e.slide_id) === slideId; });
-  const data = existing ? Object.assign({}, existing.data || {}) : {};
-  data[fieldId] = newValue;
+function syncPresSelectors() {
+  // Keep presentation dropdowns in sync with dashboard state
+  var modeEl   = document.getElementById('pres_mode');
+  var periodEl = document.getElementById('pres_period');
+  var yearEl   = document.getElementById('pres_year');
+  if (modeEl)   modeEl.value   = hsPeriodMode;
+  if (periodEl) periodEl.value = String(hsPeriodVal);
+  if (yearEl)   yearEl.value   = String(hsYear);
+}
 
-  const entry = {
-    id:         uid(),
-    slideId:    slideId,
-    slideTitle: (slides.find(function(s){ return s.id === slideId; }) || {}).title || '',
-    data:       data,
-    period:     existing ? (existing.period || '') : '',
-    note:       'Edited during presentation',
-    by:         currentRole === 'admin' ? 'Admin' : 'Team',
-    ts:         tsNow()
-  };
-  entries.unshift(entry);
-  await saveEntry(entry);
-  showToast('Saved');
+async function refreshPresentation() {
+  _liveCache = null; // Clear cache so new period loads fresh
+  document.getElementById('presContent').innerHTML = '<div style="text-align:center;padding:3rem;color:#aaa;">Loading...</div>';
+  try {
+    const html = await buildPresHTML(false);
+    document.getElementById('presContent').innerHTML = html;
+  } catch(err) {
+    console.error('Presentation error:', err);
+    document.getElementById('presContent').innerHTML = '<div style="text-align:center;padding:3rem;color:#e24b4a;">Error: ' + err.message + '</div>';
+  }
 }
 
 async function openPresentation() {
   document.getElementById('presContent').innerHTML = '<div style="text-align:center;padding:3rem;color:#aaa;">Loading live data...</div>';
   document.getElementById('presOverlay').classList.add('show');
+  syncPresSelectors();
+  updatePresMode(hsPeriodMode);
   try {
     const html = await buildPresHTML(false);
     document.getElementById('presContent').innerHTML = html;
