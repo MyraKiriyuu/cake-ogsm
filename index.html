@@ -328,6 +328,7 @@ input, select, textarea { font-family: var(--font); }
     <div class="pres-bar">
       <div class="pres-bar-title">OGSM Presentation · Cake Indonesia</div>
       <div class="pres-bar-right">
+        <button class="pres-btn" id="editModeBtn" onclick="toggleEditMode()">&#9998; Edit: Off</button>
         <button class="pres-btn pres-btn-green" onclick="exportHTML()">↓ Export HTML</button>
         <button class="pres-btn" onclick="closePresentation()">✕ Close</button>
       </div>
@@ -2565,7 +2566,20 @@ async function buildPresHTML(snapshot) {
             ? resolveLiveField(f.type, live, snapshot, fieldCtx)
             : (f.type === 'text' ? escNL(rawVal || '--') : esc(rawVal || '--'));
 
-          return '<div class="pres-pfield">'
+
+          // Edit mode
+          if (presEditMode && !isLive && !snapshot && f.type !== 'image') {
+            var sid2 = s.id.replace(/'/g, '');
+            var fid2 = f.id.replace(/'/g, '');
+            var editEl2 = f.type === 'text'
+              ? '<textarea onblur="savePresEdit(\'' + sid2 + '\',\'' + fid2 + '\',this.value)" style="width:100%;font-size:15px;font-weight:500;color:' + t.fieldValue + ';background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:6px 8px;resize:vertical;min-height:60px;font-family:inherit;">' + esc(rawVal) + '</textarea>'
+              : '<input type="' + (f.type === 'date' ? 'date' : 'text') + '" value="' + esc(rawVal) + '" onblur="savePresEdit(\'' + sid2 + '\',\'' + fid2 + '\',this.value)" style="width:100%;font-size:15px;font-weight:500;color:' + t.fieldValue + ';background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:6px 8px;font-family:inherit;">';
+            return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';">'
+              + '<div class="pres-pfield-label" style="color:' + t.fieldLabel + ';font-size:10px;margin-bottom:4px;">' + esc(f.label) + ' <span style="opacity:.5;font-style:italic;">click to edit</span></div>'
+              + editEl2
+              + '</div>';
+          }
+
             + '<div class="pres-pfield-label">' + esc(f.label) + (isLive ? ' <span style="font-size:9px;padding:1px 5px;border-radius:99px;background:rgba(29,185,84,.2);color:#1db954;font-weight:600;">LIVE</span>' : '') + '</div>'
             + '<div class="pres-pfield-value" style="color:' + t.fieldValue + ';">' + value + '</div>'
             + '</div>';
@@ -2576,6 +2590,44 @@ async function buildPresHTML(snapshot) {
       + '</div>'
       + '</div>';
   }).join('');
+}
+
+// ─── Presentation edit mode ───────────────────────────────────
+let presEditMode = false;
+
+function toggleEditMode() {
+  presEditMode = !presEditMode;
+  const btn = document.getElementById('editModeBtn');
+  if (btn) {
+    btn.textContent = presEditMode ? 'Done editing' : '&#9998; Edit: Off';
+    btn.innerHTML  = presEditMode ? '&#10003; Done editing' : '&#9998; Edit: Off';
+    btn.style.background = presEditMode ? '#1db954' : 'transparent';
+    btn.style.color      = presEditMode ? '#fff'    : '#c0c0bc';
+    btn.style.borderColor= presEditMode ? '#1db954' : '#3a3a38';
+  }
+  // Re-render presentation with/without edit overlays
+  openPresentation();
+}
+
+async function savePresEdit(slideId, fieldId, newValue) {
+  // Find the most recent entry for this slide
+  const existing = entries.find(function(e){ return (e.slideId || e.slide_id) === slideId; });
+  const data = existing ? Object.assign({}, existing.data || {}) : {};
+  data[fieldId] = newValue;
+
+  const entry = {
+    id:         uid(),
+    slideId:    slideId,
+    slideTitle: (slides.find(function(s){ return s.id === slideId; }) || {}).title || '',
+    data:       data,
+    period:     existing ? (existing.period || '') : '',
+    note:       'Edited during presentation',
+    by:         currentRole === 'admin' ? 'Admin' : 'Team',
+    ts:         tsNow()
+  };
+  entries.unshift(entry);
+  await saveEntry(entry);
+  showToast('Saved');
 }
 
 async function openPresentation() {
