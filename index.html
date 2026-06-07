@@ -1258,20 +1258,21 @@ let hsYear       = new Date().getFullYear();
 let hsPeriodVal  = Math.floor(new Date().getMonth() / 3) + 1; // current Q
 
 async function getAuthHeaders() {
-  // Use session token if available (authenticated), fall back to anon key
-  if (CONFIGURED) {
-    const { data } = await _supabase.auth.getSession();
-    if (data?.session?.access_token) {
-      return {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${data.session.access_token}`
-      };
-    }
-  }
-  return {
+  // Always use anon key for apikey header
+  // Use session token for Authorization when available, otherwise anon key
+  var headers = {
     'apikey': SUPABASE_KEY,
-    'Authorization': `Bearer ${SUPABASE_KEY}`
+    'Authorization': 'Bearer ' + SUPABASE_KEY
   };
+  if (CONFIGURED) {
+    try {
+      const { data } = await _supabase.auth.getSession();
+      if (data && data.session && data.session.access_token) {
+        headers['Authorization'] = 'Bearer ' + data.session.access_token;
+      }
+    } catch(e) {}
+  }
+  return headers;
 }
 
 async function loadHubSpotDeals(filters) {
@@ -2421,6 +2422,7 @@ async function buildPresHTML(snapshot) {
     const e = latestBySlide[s.id];
     const layout = s.layout || 'data';
     const hasLiveFields = s.fields.some(function(f){return f.type.startsWith('hs_') || f.type.startsWith('ac_');});
+    const hasHSFields   = s.fields.some(function(f){return f.type.startsWith('hs_');});
     const disclaimer = '<div style="margin-top:1.25rem;padding-top:.75rem;border-top:1px solid ' + t.border + ';font-size:10px;color:' + t.disclaimer + ';text-align:right;">Designed by Myra via Claude AI</div>';
 
     // -- Title / Divider slide layout --------------------------
@@ -2456,7 +2458,7 @@ async function buildPresHTML(snapshot) {
           + '</div>';
       }).join('');
 
-      return '<div class="pres-slide" style="min-height:300px;">'
+      return '<div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '" style="min-height:300px;">'
         + '<div style="background:var(--g);padding:3.5rem 2.5rem;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:300px;">'
         + '<div style="font-size:10px;color:rgba(255,255,255,.55);letter-spacing:.1em;text-transform:uppercase;margin-bottom:1rem;">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
         + imageHTML
@@ -2545,7 +2547,7 @@ async function buildPresHTML(snapshot) {
     }
 
     // -- Data slide layout (default) ---------------------------
-    return '<div class="pres-slide" style="background:' + t.slideBg + ';border-color:' + t.border + ';">'
+    return '<div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '" style="background:' + t.slideBg + ';border-color:' + t.border + ';">'
       + '<div class="pres-slide-head" style="background:' + t.headerBg + ';">'
       + '<div class="pres-slide-num" style="color:' + t.meta + '">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
       + '<div class="pres-slide-title" style="color:' + t.headerText + '">' + esc(s.title) + '</div>'
@@ -2633,14 +2635,20 @@ function syncPresSelectors() {
 }
 
 async function refreshPresentation() {
-  _liveCache = null; // Clear cache so new period loads fresh
-  document.getElementById('presContent').innerHTML = '<div style="text-align:center;padding:3rem;color:#aaa;">Loading...</div>';
+  _liveCache = null;
+  var scroll = document.getElementById('presContent');
+  var scrollPos = scroll ? scroll.scrollTop : 0;
+  if (scroll) scroll.innerHTML = '<div style="text-align:center;padding:3rem;color:#aaa;">Loading...</div>';
   try {
     const html = await buildPresHTML(false);
-    document.getElementById('presContent').innerHTML = html;
+    if (scroll) {
+      scroll.innerHTML = html;
+      scroll.scrollTop = scrollPos;
+    }
+    setupPeriodBarVisibility();
   } catch(err) {
     console.error('Presentation error:', err);
-    document.getElementById('presContent').innerHTML = '<div style="text-align:center;padding:3rem;color:#e24b4a;">Error: ' + err.message + '</div>';
+    if (scroll) scroll.innerHTML = '<div style="text-align:center;padding:3rem;color:#e24b4a;">Error: ' + err.message + '</div>';
   }
 }
 
@@ -2652,10 +2660,33 @@ async function openPresentation() {
   try {
     const html = await buildPresHTML(false);
     document.getElementById('presContent').innerHTML = html;
+    // Show/hide period bar based on slide visibility
+    setupPeriodBarVisibility();
   } catch(err) {
     console.error('Presentation error:', err);
     document.getElementById('presContent').innerHTML = '<div style="text-align:center;padding:3rem;color:#e24b4a;">Error loading presentation: ' + err.message + '<br><br><small>Check browser console for details.</small></div>';
   }
+}
+
+function setupPeriodBarVisibility() {
+  var scroll = document.getElementById('presContent');
+  var bar    = document.getElementById('presPeriodBar');
+  if (!scroll || !bar) return;
+  function checkVisibility() {
+    var slides = scroll.querySelectorAll('.pres-slide');
+    var centerY = scroll.scrollTop + scroll.clientHeight / 2;
+    var currentSlide = null;
+    slides.forEach(function(sl) {
+      if (sl.offsetTop <= centerY && sl.offsetTop + sl.offsetHeight >= centerY) {
+        currentSlide = sl;
+      }
+    });
+    if (currentSlide) {
+      bar.style.display = currentSlide.getAttribute('data-has-hs') === '1' ? 'flex' : 'none';
+    }
+  }
+  scroll.addEventListener('scroll', checkVisibility);
+  checkVisibility();
 }
 function closePresentation() {
   document.getElementById('presOverlay').classList.remove('show');
