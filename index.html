@@ -2601,8 +2601,9 @@ async function buildPresHTML(snapshot) {
 }
 
 function updatePresMode(mode) {
+  var modeChanged = (hsPeriodMode !== mode);
   hsPeriodMode = mode;
-  hsPeriodVal  = 1;
+  if (modeChanged) hsPeriodVal = 1; // only reset when mode actually changes
   // Update period dropdown options based on mode
   const periodSel = document.getElementById('pres_period');
   const yearSel   = document.getElementById('pres_year');
@@ -2625,13 +2626,22 @@ function updatePresMode(mode) {
 }
 
 function syncPresSelectors() {
-  // Keep presentation dropdowns in sync with dashboard state
   var modeEl   = document.getElementById('pres_mode');
   var periodEl = document.getElementById('pres_period');
   var yearEl   = document.getElementById('pres_year');
   if (modeEl)   modeEl.value   = hsPeriodMode;
-  if (periodEl) periodEl.value = String(hsPeriodVal);
   if (yearEl)   yearEl.value   = String(hsYear);
+  // Rebuild period options first, then set value
+  if (periodEl && hsPeriodMode !== 'all') {
+    var curVal = hsPeriodVal;
+    periodEl.innerHTML = hsPeriodMode === 'quarter'
+      ? '<option value="1">Q1</option><option value="2">Q2</option><option value="3">Q3</option><option value="4">Q4</option>'
+      : hsPeriodMode === 'semester'
+      ? '<option value="1">H1</option><option value="2">H2</option>'
+      : ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+          .map(function(m,i){ return '<option value="' + (i+1) + '">' + m + '</option>'; }).join('');
+    periodEl.value = String(curVal);
+  }
 }
 
 async function refreshPresentation() {
