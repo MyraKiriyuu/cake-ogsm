@@ -1641,10 +1641,11 @@ function renderSlideCard(s, idx) {
       <div class="slide-card-title" style="cursor:text;" title="Click to edit title"
         onclick="event.stopPropagation(); startEditTitle('${s.id}', this)"
         id="st_${s.id}">${esc(s.title)}</div>
-      <div style="font-size:10px;font-weight:500;padding:2px 8px;border-radius:99px;background:${(s.layout||'data')==='title' ? '#E6F1FB' : 'var(--g-light)'};color:${(s.layout||'data')==='title' ? '#185FA5' : 'var(--gd)'};">${(s.layout||'data')==='title' ? 'Title slide' : 'Data slide'}</div>
+      <div style="font-size:10px;font-weight:500;padding:2px 8px;border-radius:99px;background:${(s.layout||'data')==='title' ? '#E6F1FB' : 'var(--g-light)'};color:${(s.layout||'data')==='title' ? '#185FA5' : 'var(--gd)'};">${(s.layout||'data')==='title' ? 'Title slide' : (s.layout||'data')==='event' ? 'Event slide' : 'Data slide'}</div>
       <select onchange="event.stopPropagation(); changeSlideLayout('${s.id}', this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);">
         <option value="data"  ${(s.layout||'data')==='data'  ? 'selected' : ''}>Data</option>
         <option value="title" ${(s.layout||'data')==='title' ? 'selected' : ''}>Title</option>
+        <option value="event" ${(s.layout||'data')==='event' ? 'selected' : ''}>Event</option>
       </select>
       <select onchange="event.stopPropagation(); setSlideTheme('${s.id}', this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);" title="Slide theme">
         <option value="global" ${!s.theme ? 'selected' : ''}>Theme: Global</option>
