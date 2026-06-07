@@ -195,8 +195,8 @@ input, select, textarea { font-family: var(--font); }
 .pres-btn:hover { background: #2a2a28; }
 .pres-btn-green { background: var(--g); color: #fff; border-color: var(--g); }
 .pres-btn-green:hover { background: var(--g-dark); }
-.pres-scroll { flex: 1; overflow-y: auto; padding: 2.5rem 1.5rem; }
-.pres-slide { max-width: 720px; margin: 0 auto 2rem; background: #1a1a18; border: 1px solid #2a2a28; border-radius: 16px; overflow: hidden; }
+.pres-scroll { flex: 1; overflow-y: auto; padding: 1.5rem; }
+.pres-slide { max-width: 100%; width: 100%; margin: 0 0 1.5rem; background: #1a1a18; border: 1px solid #2a2a28; border-radius: 12px; overflow: hidden; }
 .pres-slide-head { background: var(--g); padding: 1.25rem 1.5rem; }
 .pres-slide-num { font-size: 11px; color: rgba(255,255,255,.6); margin-bottom: 3px; }
 .pres-slide-title { font-size: 20px; font-weight: 600; color: #fff; }
@@ -339,7 +339,7 @@ input, select, textarea { font-family: var(--font); }
 <div class="toast" id="toast"></div>
 
 <script>
-// ─── Password reset flow ───────────────────────────────────────
+// --- Password reset flow ---------------------------------------
 async function checkForResetToken() {
   const hash = window.location.hash;
   if (hash && hash.includes('type=recovery') || hash.includes('type=invite')) {
@@ -394,11 +394,50 @@ async function setNewPassword() {
   }, 1500);
 }
 
-// ─── Supabase init ─────────────────────────────────────────────
+// --- Supabase init ---------------------------------------------
 const CONFIGURED = SUPABASE_URL !== 'YOUR_SUPABASE_URL';
 
+// --- Session persistence (8 hour login) -----------------------
+const SESSION_KEY = 'ogsm_session';
+const SESSION_TTL = 8 * 60 * 60 * 1000; // 8 hours in ms
+
+function saveSession(role) {
+  lsSet(SESSION_KEY, { role, ts: Date.now() });
+}
+
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+
+async function restoreSession() {
+  const saved = lsGet(SESSION_KEY);
+  if (!saved) return false;
+  if (Date.now() - saved.ts > SESSION_TTL) {
+    clearSession();
+    return false;
+  }
+  if (CONFIGURED) {
+    const { data } = await _supabase.auth.getSession();
+    if (!data?.session) { clearSession(); return false; }
+  }
+  currentRole = saved.role;
+  currentUser = { email: saved.email || '' };
+  return true;
+}
+
 // Check for password reset / invite token in URL on page load
-window.addEventListener('load', () => { if (CONFIGURED) checkForResetToken(); });
+window.addEventListener('load', async () => {
+  if (CONFIGURED) checkForResetToken();
+  // Try to restore session
+  const restored = await restoreSession();
+  if (restored) {
+    await loadData();
+    document.getElementById('authScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display    = 'flex';
+    document.getElementById('roleLabel').textContent = currentRole === 'admin' ? 'Admin' : 'Team';
+    buildNav(); buildPages(); renderAll();
+  }
+});
 let _supabase = null;
 if (CONFIGURED) {
   _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -406,7 +445,7 @@ if (CONFIGURED) {
   document.getElementById('demoHint').style.display = 'none';
 }
 
-// ─── State ─────────────────────────────────────────────────────
+// --- State -----------------------------------------------------
 let currentUser   = null;
 let currentRole   = 'team';
 let authRoleSelected = 'admin';
@@ -415,15 +454,16 @@ let entries       = [];
 let histFilter    = 'all';
 let activeSlideId = null;
 
-// ─── Helpers ───────────────────────────────────────────────────
+// --- Helpers ---------------------------------------------------
 const uid    = () => Date.now() + '_' + Math.random().toString(36).slice(2, 7);
 const tsNow  = () => new Date().toISOString();
 const esc    = s  => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const escNL  = s  => esc(s).replace(/\n/g,'<br>');
 const lsGet  = k  => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
 const lsSet  = (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 
 function fmtTs(iso) {
-  if (!iso) return '—';
+  if (!iso) return '--';
   const d = new Date(iso);
   return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })
     + ' · ' + d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
@@ -436,25 +476,39 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2400);
 }
 
-// ─── Data layer (Supabase or localStorage fallback) ────────────
+// --- Data layer (Supabase or localStorage fallback) ------------
 async function loadData() {
   if (CONFIGURED) {
     const [sr, er] = await Promise.all([
       _supabase.from('slides').select('*').order('position'),
       _supabase.from('entries').select('*').order('created_at', { ascending: false })
     ]);
-    slides  = (sr.data || []).map(s => ({ ...s, fields: typeof s.fields === 'string' ? JSON.parse(s.fields) : s.fields }));
+    slides  = (sr.data || []).map(s => {
+      const fields = (typeof s.fields === 'string' ? JSON.parse(s.fields) : s.fields) || [];
+      // Auto-migrate: any field with type 'url' that has image-related label -> type 'image'
+      const migratedFields = fields.map(function(f) {
+        if (f.type === 'url' && f.label && f.label.toLowerCase().match(/image|photo|picture|foto/)) {
+          return Object.assign({}, f, { type: 'image' });
+        }
+        return f;
+      });
+      return Object.assign({}, s, { fields: migratedFields });
+    });
     entries = er.data || [];
   } else {
     slides  = lsGet('ogsm_slides')  || [];
     entries = lsGet('ogsm_entries') || [];
     if (!slides.length) seedSlides();
   }
+  await loadClickEntries();
 }
 
 async function saveSlide(s) {
   if (CONFIGURED) {
-    await _supabase.from('slides').upsert({ id: s.id, title: s.title, fields: s.fields, position: s.position ?? 0 });
+    await _supabase.from('slides').upsert({
+      id: s.id, title: s.title, fields: s.fields,
+      position: s.position ?? 0, layout: s.layout || 'data'
+    });
   } else {
     lsSet('ogsm_slides', slides);
   }
@@ -481,7 +535,7 @@ async function deleteEntryDB(id) {
   else lsSet('ogsm_entries', entries);
 }
 
-// ─── Seed (demo mode only) ─────────────────────────────────────
+// --- Seed (demo mode only) -------------------------------------
 function seedSlides() {
   slides = [
     { id: uid(), title: 'Revenue summary', position: 0, fields: [
@@ -506,7 +560,7 @@ function seedSlides() {
       { id: uid(), label: 'Top company by clicks',   type: 'text'   },
       { id: uid(), label: 'New user sign-ups',       type: 'number' },
     ]},
-    { id: uid(), title: 'Q2 OGSM — objective & goals', position: 3, fields: [
+    { id: uid(), title: 'Q2 OGSM -- objective & goals', position: 3, fields: [
       { id: uid(), label: 'Objective',          type: 'text'     },
       { id: uid(), label: 'Revenue goal (USD)', type: 'currency' },
       { id: uid(), label: 'New clients target', type: 'number'   },
@@ -523,7 +577,7 @@ function seedSlides() {
   lsSet('ogsm_slides', slides);
 }
 
-// ─── Auth ──────────────────────────────────────────────────────
+// --- Auth ------------------------------------------------------
 function setRole(role, el) {
   authRoleSelected = role;
   document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
@@ -542,6 +596,7 @@ async function doLogin() {
     if (!ok) { errEl.textContent = 'Invalid credentials.'; return; }
     currentRole = authRoleSelected;
     currentUser = { email };
+    saveSession(currentRole);
     enterApp();
     return;
   }
@@ -558,11 +613,13 @@ async function doLogin() {
   }
   currentRole = dbRole;
   currentUser = data.user;
+  saveSession(currentRole);
   enterApp();
 }
 
 function logout() {
   if (CONFIGURED) _supabase.auth.signOut();
+  clearSession();
   currentUser = null;
   document.getElementById('authScreen').style.display = 'flex';
   document.getElementById('mainApp').style.display   = 'none';
@@ -579,18 +636,20 @@ async function enterApp() {
   buildNav(); buildPages(); renderAll();
 }
 
-// ─── Nav ───────────────────────────────────────────────────────
+// --- Nav -------------------------------------------------------
 const TABS = {
   admin: [
     { id: 'dashboard', label: 'Dashboard'     },
     { id: 'builder',   label: 'Slide builder' },
     { id: 'entry',     label: 'Data entry'    },
+    { id: 'clicks',    label: 'Apply clicks'  },
     { id: 'history',   label: 'History'       },
   ],
   team: [
-    { id: 'dashboard', label: 'Dashboard'  },
-    { id: 'entry',     label: 'Data entry' },
-    { id: 'history',   label: 'History'    },
+    { id: 'dashboard', label: 'Dashboard'    },
+    { id: 'entry',     label: 'Data entry'   },
+    { id: 'clicks',    label: 'Apply clicks' },
+    { id: 'history',   label: 'History'      },
   ],
 };
 
@@ -606,6 +665,100 @@ function buildPages() {
   ).join('');
 }
 
+// --- Presentation theme ---------------------------------
+let globalTheme = lsGet('ogsm_global_theme') || 'light';
+
+const THEMES = {
+  light: { slideBg:'#ffffff', slideText:'#0f0f0f', headerBg:'#1db954', headerText:'#ffffff', fieldLabel:'#888888', fieldValue:'#0f0f0f', border:'#e5e5e3', meta:'#aaaaaa', disclaimer:'rgba(0,0,0,.2)' },
+  dark:  { slideBg:'#1a1a18', slideText:'#f0f0ee', headerBg:'#111110', headerText:'#f0f0ee', fieldLabel:'#6a6a68', fieldValue:'#f0f0ee', border:'#2a2a28', meta:'#4a4a48', disclaimer:'rgba(255,255,255,.2)' },
+  cake:  { slideBg:'#1db954', slideText:'#ffffff',  headerBg:'#0f6e34', headerText:'#ffffff', fieldLabel:'rgba(255,255,255,.65)', fieldValue:'#ffffff', border:'rgba(255,255,255,.2)', meta:'rgba(255,255,255,.4)', disclaimer:'rgba(255,255,255,.3)' },
+};
+
+function getSlideTheme(s) {
+  var key = s.theme || globalTheme || 'light';
+  return THEMES[key] || THEMES[globalTheme] || THEMES.light;
+}
+
+function setGlobalTheme(t) {
+  globalTheme = t;
+  lsSet('ogsm_global_theme', t);
+  renderBuilder();
+  showToast('Global theme set to ' + t);
+}
+
+async function setSlideTheme(id, t) {
+  const s = slides.find(function(sl){ return sl.id === id; });
+  if (!s) return;
+  s.theme = t === 'global' ? null : t;
+  await saveSlide(s);
+  renderBuilder();
+  showToast('Slide theme updated');
+}
+
+// --- Apply clicks state ----------------------------------------
+let clickEntries   = [];
+let clickEntryType = 'event'; // 'event' or 'job'
+let clickFilter    = 'all';
+
+async function loadClickEntries() {
+  clickEntries = lsGet('ogsm_clicks') || [];
+  if (CONFIGURED) {
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/apply_clicks?order=created_at.desc`,
+        { headers }
+      );
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) clickEntries = data;
+    } catch(e) { console.error('Click load error:', e); }
+  }
+}
+
+async function saveClickEntry(entry) {
+  clickEntries.unshift(entry);
+  lsSet('ogsm_clicks', clickEntries);
+  if (CONFIGURED) {
+    try {
+      const headers = await getAuthHeaders();
+      await fetch(`${SUPABASE_URL}/rest/v1/apply_clicks`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+          entry_type:    entry.type,
+          company:       entry.company,
+          title:         entry.title,
+          job_slug:      entry.jobSlug  || null,
+          period:        entry.period,
+          event_date:      entry.eventDate    || null,
+          event_end_date:  entry.eventEndDate || null,
+          registrations: entry.registrations ? parseInt(entry.registrations) : null,
+          attendees:     entry.attendees     ? parseInt(entry.attendees)     : null,
+          apply_clicks:  entry.applyClicks   ? parseInt(entry.applyClicks)   : null,
+          job_views:     entry.jobViews      ? parseInt(entry.jobViews)      : null,
+          note:          entry.note          || null,
+          by:            entry.by
+        })
+      });
+    } catch(e) { console.error('Click save error:', e); }
+  }
+}
+
+async function deleteClickEntry(id) {
+  clickEntries = clickEntries.filter(e => e.id !== id);
+  lsSet('ogsm_clicks', clickEntries);
+  if (CONFIGURED) {
+    try {
+      const headers = await getAuthHeaders();
+      await fetch(`${SUPABASE_URL}/rest/v1/apply_clicks?id=eq.${id}`, {
+        method: 'DELETE', headers
+      });
+    } catch(e) { console.error('Click delete error:', e); }
+  }
+  renderClicks();
+  showToast('Entry deleted');
+}
+
 function goTo(id, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.subnav-btn').forEach(b => b.classList.remove('active'));
@@ -614,37 +767,684 @@ function goTo(id, el) {
   renderAll();
 }
 
-// ─── Render ────────────────────────────────────────────────────
+// --- Render ----------------------------------------------------
 function renderAll() {
   renderDashboard();
   if (currentRole === 'admin') renderBuilder();
   renderEntry();
+  renderClicks();
   renderHistory();
 }
 
+function renderClicks() {
+  const el = document.getElementById('page-clicks');
+  if (!el) return;
+
+  // Stats
+  const events = clickEntries.filter(e => (e.entry_type || e.type) === 'event');
+  const jobs   = clickEntries.filter(e => (e.entry_type || e.type) === 'job');
+  const totalClicks = clickEntries.reduce((s, e) => s + (parseInt(e.apply_clicks || e.applyClicks) || 0), 0);
+  const totalRegs   = events.reduce((s, e) => s + (parseInt(e.registrations) || 0), 0);
+
+  // Filter
+  const filtered = clickFilter === 'all'   ? clickEntries
+                 : clickFilter === 'event' ? events
+                 : jobs;
+
+  // Top companies by clicks
+  const byCompany = {};
+  clickEntries.forEach(e => {
+    const co = e.company || 'Unknown';
+    byCompany[co] = (byCompany[co] || 0) + (parseInt(e.apply_clicks || e.applyClicks) || 0);
+  });
+  const topCompanies = Object.entries(byCompany)
+    .sort((a,b) => b[1] - a[1]).slice(0, 5);
+  const maxClicks = topCompanies[0]?.[1] || 1;
+
+  el.innerHTML = `
+    <div class="page-header">
+      <div class="page-title">Apply clicks</div>
+      <div class="page-sub">
+        Track apply clicks and event performance across job postings and campaigns.
+        Log each event or job posting separately -- every entry is timestamped, attributed to you,
+        and visible to the whole team in the history log below.
+      </div>
+    </div>
+
+    <div class="metric-row">
+      <div class="metric-card"><div class="metric-lbl">Total apply clicks</div><div class="metric-val">${totalClicks.toLocaleString()}</div><div class="metric-sub">${clickEntries.length} entr${clickEntries.length !== 1 ? 'ies' : 'y'}</div></div>
+      <div class="metric-card"><div class="metric-lbl">Events logged</div><div class="metric-val">${events.length}</div><div class="metric-sub">${totalRegs.toLocaleString()} total registrations</div></div>
+      <div class="metric-card"><div class="metric-lbl">Job postings logged</div><div class="metric-val">${jobs.length}</div></div>
+    </div>
+
+    ${topCompanies.length ? `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.5rem;">
+      <div class="section-title" style="margin-bottom:.75rem;">Top companies by apply clicks</div>
+      ${topCompanies.map(([co, clicks]) =>
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
+        + '<div style="width:130px;font-size:12px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + esc(co) + '">' + esc(co) + '</div>'
+        + '<div style="flex:1;height:8px;background:var(--surface);border-radius:99px;overflow:hidden;">'
+        + '<div style="width:' + Math.round(clicks/maxClicks*100) + '%;height:100%;background:var(--g);border-radius:99px;"></div></div>'
+        + '<div style="width:60px;text-align:right;font-size:12px;font-weight:500;color:var(--ink);">' + clicks.toLocaleString() + '</div>'
+        + '</div>'
+      ).join('')}
+    </div>` : ''}
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem;">
+
+      <!-- Event entry form -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
+        <div style="background:var(--g);padding:.85rem 1.25rem;">
+          <div style="font-size:14px;font-weight:600;color:#fff;">Log an event</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px;">Webinars, campus visits, offline events. Track registrations, attendance and apply clicks per event.</div>
+        </div>
+        <div style="padding:1.25rem;">
+          <div class="entry-field"><label>Event name *</label><input type="text" id="ev-title" placeholder="e.g. Young Talent Webinar - J&T Cargo"></div>
+          <div class="entry-field"><label>Company *</label><input type="text" id="ev-company" placeholder="e.g. JT Cargo"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="entry-field"><label>Start date</label><input type="date" id="ev-date"></div>
+            <div class="entry-field"><label>End date <span style="font-weight:400;color:var(--ink3)">(optional)</span></label><input type="date" id="ev-end-date"></div>
+          </div>
+          <div class="entry-field"><label>Period</label><input type="text" id="ev-period" placeholder="e.g. Q2 2026"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="entry-field"><label>Registrations</label><input type="number" id="ev-regs" placeholder="0" min="0"></div>
+            <div class="entry-field"><label>Attendees</label><input type="number" id="ev-att" placeholder="0" min="0"></div>
+          </div>
+          <div class="entry-field"><label>Apply clicks</label><input type="number" id="ev-clicks" placeholder="0" min="0"></div>
+          <div class="entry-field"><label>Notes (optional)</label><input type="text" id="ev-note" placeholder="Any additional context"></div>
+          <div style="padding-top:.75rem;border-top:1px solid var(--border);">
+            <button class="btn btn-primary" onclick="submitClickEntry('event')" style="width:100%;">&#10003; Save event entry</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Job posting entry form -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
+        <div style="background:#185FA5;padding:.85rem 1.25rem;">
+          <div style="font-size:14px;font-weight:600;color:#fff;">Log a job posting</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px;">Track performance of individual job listings on Cake. Log views and apply clicks per job per period.</div>
+        </div>
+        <div style="padding:1.25rem;">
+          <div class="entry-field"><label>Job title *</label><input type="text" id="job-title" placeholder="e.g. Production Management Candidate 2026"></div>
+          <div class="entry-field"><label>Company *</label><input type="text" id="job-company" placeholder="e.g. PT PMCI (UNIQLO)"></div>
+          <div class="entry-field"><label>Job slug (optional)</label><input type="text" id="job-slug" placeholder="e.g. production-management-2026"></div>
+          <div class="entry-field"><label>Period *</label><input type="text" id="job-period" placeholder="e.g. Q1 2026 or January 2026"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="entry-field"><label>Unique job views</label><input type="number" id="job-views" placeholder="0" min="0"></div>
+            <div class="entry-field"><label>Apply clicks</label><input type="number" id="job-clicks" placeholder="0" min="0"></div>
+          </div>
+          <div class="entry-field"><label>Notes (optional)</label><input type="text" id="job-note" placeholder="Any additional context"></div>
+          <div style="padding-top:.75rem;border-top:1px solid var(--border);">
+            <button class="btn btn-primary" onclick="submitClickEntry('job')" style="width:100%;background:#185FA5;border-color:#185FA5;">&#10003; Save job entry</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- CSV Upload -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:1.5rem;">
+      <div style="background:#6B4FA0;padding:.85rem 1.25rem;">
+        <div style="font-size:14px;font-weight:600;color:#fff;">Bulk upload via CSV</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px;">
+          Upload multiple job postings at once. Download the template, fill it in, and upload it here.
+          Each row becomes one job posting entry -- all saved with your name and a timestamp.
+        </div>
+      </div>
+      <div style="padding:1.25rem;">
+        <div style="font-size:13px;color:var(--ink2);line-height:1.7;margin-bottom:1rem;">
+          <strong>How to use:</strong> Download the CSV template below, open it in Excel or Google Sheets,
+          fill in one job posting per row, save as CSV, then upload it here. Required columns are
+          <code style="font-family:var(--mono);font-size:11px;background:var(--surface);padding:1px 5px;border-radius:4px;">company</code>,
+          <code style="font-family:var(--mono);font-size:11px;background:var(--surface);padding:1px 5px;border-radius:4px;">title</code>, and
+          <code style="font-family:var(--mono);font-size:11px;background:var(--surface);padding:1px 5px;border-radius:4px;">period</code>.
+          All other columns are optional.
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:1rem;">
+          <button class="btn btn-secondary" onclick="downloadCSVTemplate()">&#8659; Download template</button>
+          <label style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;font-size:13px;font-weight:500;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--ink);cursor:pointer;">
+            &#8657; Upload CSV
+            <input type="file" accept=".csv" style="display:none;" onchange="handleCSVUpload(this)">
+          </label>
+        </div>
+        <div id="csvPreview" style="display:none;">
+          <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:.5rem;" id="csvPreviewTitle"></div>
+          <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:.75rem;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;" id="csvPreviewTable"></table>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <button class="btn btn-primary" onclick="confirmCSVUpload()" id="csvConfirmBtn">&#10003; Save all entries</button>
+            <button class="btn btn-secondary" onclick="cancelCSVUpload()">Cancel</button>
+            <span style="font-size:11px;color:var(--ink3);" id="csvRowCount"></span>
+          </div>
+        </div>
+        <div id="csvError" style="font-size:12px;color:#e24b4a;margin-top:6px;"></div>
+      </div>
+    </div>
+
+    <!-- History -->
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:.75rem;">
+      <div class="section-title" style="margin-bottom:0;">Entry history</div>
+      <div style="display:flex;gap:6px;">
+        <button class="hist-chip${clickFilter==='all'   ? ' active':''}" onclick="setClickFilter('all',this)">All</button>
+        <button class="hist-chip${clickFilter==='event' ? ' active':''}" onclick="setClickFilter('event',this)">Events</button>
+        <button class="hist-chip${clickFilter==='job'   ? ' active':''}" onclick="setClickFilter('job',this)">Job postings</button>
+      </div>
+    </div>
+    <div>
+      ${filtered.length ? filtered.map(e => renderClickItem(e)).join('')
+        : '<div class="empty-state"><div class="empty-state-text">No entries yet. Use the forms above to log your first event or job posting.</div></div>'}
+    </div>`;
+}
+
+function renderClickItem(e) {
+  const type      = e.entry_type || e.type;
+  const isEvent   = type === 'event';
+  const clicks    = parseInt(e.apply_clicks || e.applyClicks) || 0;
+  const regs      = parseInt(e.registrations) || 0;
+  const att       = parseInt(e.attendees) || 0;
+  const views     = parseInt(e.job_views || e.jobViews) || 0;
+  const attRate   = regs > 0 ? Math.round(att / regs * 100) : null;
+  const convRate  = views > 0 ? Math.round(clicks / views * 100) : null;
+  const color     = isEvent ? 'var(--g)' : '#185FA5';
+  const label     = isEvent ? 'Event' : 'Job posting';
+  const title     = e.title || e.job_title || e.deal_name || '--';
+  const company   = e.company || '--';
+  const period    = e.period || (e.event_date ? e.event_date.slice(0,10) : '--');
+  const ts        = e.created_at || e.ts;
+  const by        = e.by || 'Team';
+  const note      = e.note || '';
+  const slug      = e.job_slug || e.jobSlug || '';
+
+  return '<div class="hist-item">'
+    + '<div class="hist-item-top">'
+    + '<div>'
+    + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">'
+    + '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;background:' + color + ';color:#fff;">' + label + '</span>'
+    + '<span style="font-size:13px;font-weight:600;color:var(--ink);">' + esc(title) + '</span>'
+    + '</div>'
+    + '<div style="font-size:11px;color:var(--ink2);">' + esc(company) + (slug ? ' · <span style="font-family:var(--mono);font-size:10px;">' + esc(slug) + '</span>' : '') + '</div>'
+    + '<div class="hist-ts">' + fmtTs(ts) + ' · by ' + esc(by) + (note ? ' · ' + esc(note) : '') + '</div>'
+    + '</div>'
+    + (currentRole === 'admin' ? '<button class="btn btn-sm btn-danger" onclick="deleteClickEntry(' + JSON.stringify(e.id || '') + ')">Delete</button>' : '')
+    + '</div>'
+    + '<div class="hist-fields" style="margin-top:8px;">'
+    + '<div class="hist-field"><div class="hist-field-label">Period</div><div class="hist-field-value">' + esc(period) + '</div></div>'
+    + (clicks ? '<div class="hist-field"><div class="hist-field-label">Apply clicks</div><div class="hist-field-value">' + clicks.toLocaleString() + '</div></div>' : '')
+    + (regs   ? '<div class="hist-field"><div class="hist-field-label">Registrations</div><div class="hist-field-value">' + regs.toLocaleString() + '</div></div>' : '')
+    + (att    ? '<div class="hist-field"><div class="hist-field-label">Attendees</div><div class="hist-field-value">' + att.toLocaleString() + (attRate ? ' (' + attRate + '%)' : '') + '</div></div>' : '')
+    + (views  ? '<div class="hist-field"><div class="hist-field-label">Job views</div><div class="hist-field-value">' + views.toLocaleString() + (convRate ? ' · ' + convRate + '% conv.' : '') + '</div></div>' : '')
+    + '</div>'
+    + '</div>';
+}
+
+// --- CSV upload helpers ---------------------------------------
+const CSV_COLUMNS = [
+  { key: 'company',       label: 'company',       required: true,  hint: 'e.g. PT PMCI (UNIQLO)' },
+  { key: 'title',         label: 'title',         required: true,  hint: 'e.g. Production Management Candidate 2026' },
+  { key: 'period',        label: 'period',        required: true,  hint: 'e.g. Q2 2026 or May 2026' },
+  { key: 'job_slug',      label: 'job_slug',      required: false, hint: 'e.g. production-management-2026' },
+  { key: 'job_views',     label: 'job_views',     required: false, hint: 'e.g. 9468' },
+  { key: 'apply_clicks',  label: 'apply_clicks',  required: false, hint: 'e.g. 4191' },
+  { key: 'note',          label: 'note',          required: false, hint: 'Any additional context' },
+];
+
+let csvParsedRows = [];
+
+function downloadCSVTemplate() {
+  const headers = CSV_COLUMNS.map(function(c) { return c.key; }).join(',');
+  const example = CSV_COLUMNS.map(function(c) { return '"' + c.hint + '"'; }).join(',');
+  const hint    = CSV_COLUMNS.map(function(c) { return c.required ? '"required"' : '"optional"'; }).join(',');
+  const NL = String.fromCharCode(10);
+  const csv = headers + NL + hint + NL + example + NL;
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'cake_ogsm_job_postings_template.csv';
+  a.click();
+  showToast('Template downloaded');
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split(String.fromCharCode(10)).filter(function(l) { return l.trim(); });
+  if (lines.length < 2) return { error: 'CSV must have at least a header row and one data row.' };
+
+  // Parse header
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
+  const required = ['company', 'title', 'period'];
+  const missing = required.filter(r => !headers.includes(r));
+  if (missing.length > 0) {
+    return { error: 'Missing required columns: ' + missing.join(', ') };
+  }
+
+  // Skip hint row if it contains "required" or "optional"
+  let dataStart = 1;
+  if (lines[1] && (lines[1].includes('required') || lines[1].includes('optional'))) {
+    dataStart = 2;
+  }
+
+  const rows = [];
+  for (let i = dataStart; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    // Parse CSV row respecting quoted fields
+    const vals = [];
+    let inQ = false, cur = '';
+    for (let ci = 0; ci < lines[i].length; ci++) {
+      const ch = lines[i][ci];
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === ',' && !inQ) { vals.push(cur.trim()); cur = ''; }
+      else { cur += ch; }
+    }
+    vals.push(cur.trim());
+
+    const row = {};
+    headers.forEach((h, idx) => { row[h] = vals[idx] || ''; });
+
+    if (!row.company || !row.title || !row.period) continue; // skip empty rows
+    rows.push(row);
+  }
+
+  if (rows.length === 0) return { error: 'No valid data rows found. Make sure company, title and period are filled in.' };
+  return { rows };
+}
+
+function handleCSVUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const errEl = document.getElementById('csvError');
+  errEl.textContent = '';
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    const result = parseCSV(e.target.result);
+    if (result.error) {
+      errEl.textContent = result.error;
+      return;
+    }
+    csvParsedRows = result.rows;
+    showCSVPreview(csvParsedRows);
+  };
+  reader.readAsText(file);
+  input.value = ''; // reset so same file can be re-uploaded
+}
+
+function showCSVPreview(rows) {
+  const preview = document.getElementById('csvPreview');
+  const title   = document.getElementById('csvPreviewTitle');
+  const table   = document.getElementById('csvPreviewTable');
+  const count   = document.getElementById('csvRowCount');
+  if (!preview) return;
+
+  title.textContent = rows.length + ' job posting' + (rows.length !== 1 ? 's' : '') + ' ready to import';
+  count.textContent = rows.length + ' entr' + (rows.length !== 1 ? 'ies' : 'y') + ' will be saved';
+
+  const cols = ['company', 'title', 'period', 'job_slug', 'job_views', 'apply_clicks', 'note'];
+  const thead = '<thead><tr>' + cols.map(c =>
+    '<th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:500;color:var(--ink2);border-bottom:1px solid var(--border);white-space:nowrap;">' + c + '</th>'
+  ).join('') + '</tr></thead>';
+
+  const tbody = '<tbody>' + rows.map((row, i) =>
+    '<tr style="background:' + (i % 2 === 0 ? 'var(--surface)' : 'var(--card)') + ';">'
+    + cols.map(c =>
+      '<td style="padding:6px 10px;font-size:12px;color:var(--ink);border-bottom:1px solid var(--border);max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + (row[c] || '') + '">'
+      + (row[c] || '<span style="color:var(--ink3);">--</span>')
+      + '</td>'
+    ).join('')
+    + '</tr>'
+  ).join('') + '</tbody>';
+
+  table.innerHTML = thead + tbody;
+  preview.style.display = 'block';
+}
+
+function cancelCSVUpload() {
+  csvParsedRows = [];
+  const preview = document.getElementById('csvPreview');
+  if (preview) preview.style.display = 'none';
+  showToast('Upload cancelled');
+}
+
+async function confirmCSVUpload() {
+  if (!csvParsedRows.length) return;
+  const btn = document.getElementById('csvConfirmBtn');
+  if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
+
+  let saved = 0;
+  for (const row of csvParsedRows) {
+    const entry = {
+      id:          uid(),
+      type:        'job',
+      title:       row.title       || '',
+      company:     row.company     || '',
+      jobSlug:     row.job_slug    || null,
+      period:      row.period      || '',
+      jobViews:    row.job_views   || null,
+      applyClicks: row.apply_clicks || null,
+      note:        row.note        || '',
+      by:          currentRole === 'admin' ? 'Admin' : 'Team',
+      ts:          tsNow()
+    };
+    await saveClickEntry(entry);
+    saved++;
+  }
+
+  csvParsedRows = [];
+  const preview = document.getElementById('csvPreview');
+  if (preview) preview.style.display = 'none';
+  if (btn) { btn.textContent = '&#10003; Save all entries'; btn.disabled = false; }
+  renderClicks();
+  showToast(saved + ' entr' + (saved !== 1 ? 'ies' : 'y') + ' saved!');
+}
+
+function submitClickEntry(type) {
+  if (type === 'event') {
+    const title   = document.getElementById('ev-title')?.value.trim();
+    const company = document.getElementById('ev-company')?.value.trim();
+    if (!title || !company) { showToast('Event name and company are required'); return; }
+    const entry = {
+      id:            uid(),
+      type:          'event',
+      title,
+      company,
+      eventDate:     document.getElementById('ev-date')?.value    || null,
+      eventEndDate:  document.getElementById('ev-end-date')?.value || null,
+      period:        document.getElementById('ev-period')?.value.trim() || '',
+      registrations: document.getElementById('ev-regs')?.value    || null,
+      attendees:     document.getElementById('ev-att')?.value     || null,
+      applyClicks:   document.getElementById('ev-clicks')?.value  || null,
+      note:          document.getElementById('ev-note')?.value.trim() || '',
+      by:            currentRole === 'admin' ? 'Admin' : 'Team',
+      ts:            tsNow()
+    };
+    saveClickEntry(entry);
+    ['ev-title','ev-company','ev-date','ev-end-date','ev-period','ev-regs','ev-att','ev-clicks','ev-note']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  } else {
+    const title   = document.getElementById('job-title')?.value.trim();
+    const company = document.getElementById('job-company')?.value.trim();
+    const period  = document.getElementById('job-period')?.value.trim();
+    if (!title || !company || !period) { showToast('Job title, company and period are required'); return; }
+    const entry = {
+      id:          uid(),
+      type:        'job',
+      title,
+      company,
+      jobSlug:     document.getElementById('job-slug')?.value.trim()   || null,
+      period,
+      jobViews:    document.getElementById('job-views')?.value         || null,
+      applyClicks: document.getElementById('job-clicks')?.value        || null,
+      note:        document.getElementById('job-note')?.value.trim()   || '',
+      by:          currentRole === 'admin' ? 'Admin' : 'Team',
+      ts:          tsNow()
+    };
+    saveClickEntry(entry);
+    ['job-title','job-company','job-slug','job-period','job-views','job-clicks','job-note']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  }
+  renderClicks();
+  showToast('Entry saved &#10003;');
+}
+
+function setClickFilter(f, el) {
+  clickFilter = f;
+  document.querySelectorAll('.hist-chip').forEach(c => c.classList.remove('active'));
+  el?.classList.add('active');
+  renderClicks();
+}
+
 // Dashboard
+// ─── Event date formatter ─────────────────────────────────────
+function formatEventDate(e) {
+  const start = e.event_date || e.eventDate;
+  const end   = e.event_end_date || e.eventEndDate;
+  if (!start) return '';
+  const fmt = function(d) {
+    return new Date(d).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  };
+  if (!end || end === start) return fmt(start) + ' · ';
+  return fmt(start) + ' - ' + fmt(end) + ' · ';
+}
+
+// ─── Event picker for slide fields ────────────────────────────
+function getEventNames() {
+  var events = clickEntries.filter(function(e){ return (e.entry_type||e.type) === 'event'; });
+  var seen = {};
+  return events.filter(function(e) {
+    var key = (e.title||e.company||'');
+    if (seen[key]) return false;
+    seen[key] = true;
+    return true;
+  }).map(function(e){ return e.title || e.company || ''; }).filter(Boolean);
+}
+
+function getEventByName(name) {
+  return clickEntries.find(function(e){
+    return (e.entry_type||e.type) === 'event' && (e.title||e.company||'') === name;
+  });
+}
+
 function fmtUSD(n) {
-  if (!n && n !== 0) return '—';
+  if (!n && n !== 0) return '--';
   return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 function fmtPct(n) {
-  if (n === null || n === undefined) return '—';
+  if (n === null || n === undefined) return '--';
   return (n > 0 ? '+' : '') + n + '%';
+}
+
+// --- HubSpot period state --------------------------------------
+let hsPeriodMode = 'quarter';   // 'quarter' | 'semester' | 'month' | 'all'
+let hsYear       = new Date().getFullYear();
+let hsPeriodVal  = Math.floor(new Date().getMonth() / 3) + 1; // current Q
+
+async function getAuthHeaders() {
+  // Use session token if available (authenticated), fall back to anon key
+  if (CONFIGURED) {
+    const { data } = await _supabase.auth.getSession();
+    if (data?.session?.access_token) {
+      return {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${data.session.access_token}`
+      };
+    }
+  }
+  return {
+    'apikey': SUPABASE_KEY,
+    'Authorization': `Bearer ${SUPABASE_KEY}`
+  };
+}
+
+async function loadHubSpotDeals(filters) {
+  if (!CONFIGURED) return [];
+  try {
+    let query = `${SUPABASE_URL}/rest/v1/hubspot_deals?select=*`;
+    if (filters) query += '&' + filters;
+    const headers = await getAuthHeaders();
+    const res = await fetch(query, { headers });
+    return await res.json() || [];
+  } catch { return []; }
 }
 
 async function loadHubSpotSummary() {
   if (!CONFIGURED) return null;
   try {
-    const url = new URL(SUPABASE_URL);
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/hubspot_summary?order=synced_at.desc&limit=1`, {
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`
-      }
-    });
+    const headers = await getAuthHeaders();
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/hubspot_summary?order=synced_at.desc&limit=1`,
+      { headers }
+    );
     const data = await res.json();
     return data?.[0] || null;
   } catch { return null; }
+}
+
+function getDateRange(mode, periodVal, year) {
+  let startDate, endDate;
+  if (mode === 'quarter') {
+    const startMonth = (periodVal - 1) * 3;
+    startDate = new Date(year, startMonth, 1);
+    endDate   = new Date(year, startMonth + 3, 0, 23, 59, 59);
+  } else if (mode === 'semester') {
+    startDate = new Date(year, periodVal === 1 ? 0 : 6, 1);
+    endDate   = new Date(year, periodVal === 1 ? 6 : 12, 0, 23, 59, 59);
+  } else if (mode === 'month') {
+    startDate = new Date(year, periodVal - 1, 1);
+    endDate   = new Date(year, periodVal, 0, 23, 59, 59);
+  }
+  return { startDate, endDate };
+}
+
+function getPreviousPeriod(mode, periodVal, year) {
+  // QoQ: previous quarter/semester/month
+  let qoqPeriod, qoqYear;
+  if (mode === 'quarter') {
+    qoqPeriod = periodVal === 1 ? 4 : periodVal - 1;
+    qoqYear   = periodVal === 1 ? year - 1 : year;
+  } else if (mode === 'semester') {
+    qoqPeriod = periodVal === 1 ? 2 : 1;
+    qoqYear   = periodVal === 1 ? year - 1 : year;
+  } else if (mode === 'month') {
+    qoqPeriod = periodVal === 1 ? 12 : periodVal - 1;
+    qoqYear   = periodVal === 1 ? year - 1 : year;
+  }
+  // YoY: same period last year
+  return {
+    qoq: { periodVal: qoqPeriod, year: qoqYear },
+    yoy: { periodVal, year: year - 1 }
+  };
+}
+
+async function fetchPeriodTotal(mode, periodVal, year) {
+  const { startDate, endDate } = getDateRange(mode, periodVal, year);
+  if (!startDate) return 0;
+  const deals = await loadHubSpotDeals(
+    `source=eq.contracted&close_date=gte.${startDate.toISOString()}&close_date=lte.${endDate.toISOString()}`
+  );
+  return deals.reduce((s, d) => s + parseFloat(d.amount_usd || 0), 0);
+}
+
+function calcGrowth(current, previous) {
+  if (!previous || previous === 0) return null;
+  return Math.round((current - previous) / previous * 1000) / 10;
+}
+
+async function loadHubSpotForPeriod() {
+  if (!CONFIGURED) return null;
+  try {
+    const y = hsYear;
+
+    if (hsPeriodMode === 'all') {
+      return await loadHubSpotSummary();
+    }
+
+    const { startDate, endDate } = getDateRange(hsPeriodMode, hsPeriodVal, y);
+    const start = startDate.toISOString();
+    const end   = endDate.toISOString();
+
+    // Fetch current period deals + payments in parallel
+    const [contracted, payments] = await Promise.all([
+      loadHubSpotDeals(`source=eq.contracted&close_date=gte.${start}&close_date=lte.${end}`),
+      loadHubSpotDeals(`source=eq.payment_received&close_date=gte.${start}&close_date=lte.${end}`)
+    ]);
+
+    const sum = arr => arr.reduce((s, d) => s + parseFloat(d.amount_usd || 0), 0);
+    const totalContracted = sum(contracted);
+    const totalPayments   = sum(payments);
+
+    // Fetch comparison periods in parallel for QoQ and YoY
+    const { qoq, yoy } = getPreviousPeriod(hsPeriodMode, hsPeriodVal, y);
+    const [qoqTotal, yoyTotal] = await Promise.all([
+      fetchPeriodTotal(hsPeriodMode, qoq.periodVal, qoq.year),
+      fetchPeriodTotal(hsPeriodMode, yoy.periodVal, yoy.year)
+    ]);
+
+    const qoqGrowth = calcGrowth(totalContracted, qoqTotal);
+    const yoyGrowth = calcGrowth(totalContracted, yoyTotal);
+
+    // Build period labels for comparison display
+    const periodLabel = hsPeriodMode === 'quarter'  ? `Q${hsPeriodVal} ${y}`
+                      : hsPeriodMode === 'semester' ? `H${hsPeriodVal} ${y}`
+                      : new Date(y, hsPeriodVal-1, 1).toLocaleString('en-GB', { month:'long', year:'numeric' });
+
+    const qoqLabel = hsPeriodMode === 'quarter'  ? `Q${qoq.periodVal} ${qoq.year}`
+                   : hsPeriodMode === 'semester' ? `H${qoq.periodVal} ${qoq.year}`
+                   : new Date(qoq.year, qoq.periodVal-1, 1).toLocaleString('en-GB', { month:'long', year:'numeric' });
+
+    const yoyLabel = hsPeriodMode === 'quarter'  ? `Q${hsPeriodVal} ${yoy.year}`
+                   : hsPeriodMode === 'semester' ? `H${hsPeriodVal} ${yoy.year}`
+                   : new Date(yoy.year, hsPeriodVal-1, 1).toLocaleString('en-GB', { month:'long', year:'numeric' });
+
+    const topClients = [...contracted]
+      .sort((a, b) => parseFloat(b.amount_usd) - parseFloat(a.amount_usd))
+      .slice(0, 10)
+      .map(d => ({
+        name:       d.company_name || d.deal_name,
+        amount_usd: parseFloat(d.amount_usd),
+        deal_name:  d.deal_name,
+        close_date: d.close_date
+      }));
+
+    return {
+      quarter:              periodLabel,
+      qoq_label:            qoqLabel,
+      yoy_label:            yoyLabel,
+      qoq_total:            Math.round(qoqTotal * 100) / 100,
+      yoy_total:            Math.round(yoyTotal * 100) / 100,
+      total_contracted_usd: Math.round(totalContracted * 100) / 100,
+      total_payments_usd:   Math.round(totalPayments * 100) / 100,
+      deal_count:           contracted.length,
+      avg_deal_usd:         contracted.length > 0
+                              ? Math.round(totalContracted / contracted.length * 100) / 100
+                              : 0,
+      qoq_growth_pct:       qoqGrowth,
+      yoy_growth_pct:       yoyGrowth,
+      top_clients:          topClients,
+      synced_at:            new Date().toISOString()
+    };
+  } catch(e) {
+    console.error('Period load error:', e);
+    return null;
+  }
+}
+
+function buildPeriodSelector() {
+  const now = new Date();
+  const curY = now.getFullYear();
+  const sel = 'padding:5px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);';
+
+  const years = [curY, curY-1, curY-2].map(function(y) {
+    return '<option value="' + y + '"' + (y === hsYear ? ' selected' : '') + '>' + y + '</option>';
+  }).join('');
+
+  let periodOptions = '';
+  if (hsPeriodMode === 'quarter') {
+    periodOptions = [1,2,3,4].map(function(q) {
+      return '<option value="' + q + '"' + (q === hsPeriodVal ? ' selected' : '') + '>Q' + q + '</option>';
+    }).join('');
+  } else if (hsPeriodMode === 'semester') {
+    periodOptions = [1,2].map(function(h) {
+      return '<option value="' + h + '"' + (h === hsPeriodVal ? ' selected' : '') + '>H' + h + '</option>';
+    }).join('');
+  } else if (hsPeriodMode === 'month') {
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    periodOptions = months.map(function(m, i) {
+      return '<option value="' + (i+1) + '"' + ((i+1) === hsPeriodVal ? ' selected' : '') + '>' + m + '</option>';
+    }).join('');
+  }
+
+  var modeSelect = '<select onchange="hsPeriodMode=this.value; hsPeriodVal=1; renderDashboard();" style="' + sel + '">'
+    + '<option value="quarter"'  + (hsPeriodMode==='quarter'  ? ' selected' : '') + '>By Quarter</option>'
+    + '<option value="semester"' + (hsPeriodMode==='semester' ? ' selected' : '') + '>By Semester</option>'
+    + '<option value="month"'    + (hsPeriodMode==='month'    ? ' selected' : '') + '>By Month</option>'
+    + '<option value="all"'      + (hsPeriodMode==='all'      ? ' selected' : '') + '>All Time</option>'
+    + '</select>';
+
+  var periodSelect = hsPeriodMode !== 'all'
+    ? '<select onchange="hsPeriodVal=parseInt(this.value); renderDashboard();" style="' + sel + '">' + periodOptions + '</select>'
+      + '<select onchange="hsYear=parseInt(this.value); renderDashboard();" style="' + sel + '">' + years + '</select>'
+    : '';
+
+  return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' + modeSelect + periodSelect + '</div>';
 }
 
 async function renderDashboard() {
@@ -654,53 +1454,50 @@ async function renderDashboard() {
   entries.forEach(e => { const id = e.slideId || e.slide_id; if (!latestBySlide[id]) latestBySlide[id] = e; });
   const filled = Object.keys(latestBySlide).length;
 
-  const hs = await loadHubSpotSummary();
+  // Show loading state first
+  const hsPlaceholder = `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.5rem;text-align:center;">
+    <div style="font-size:13px;color:var(--ink3);">Loading HubSpot data...</div>
+  </div>`;
 
   el.innerHTML = `
     ${!CONFIGURED ? `<div class="config-banner">
       <strong>Demo mode.</strong> Data is stored in this browser only.
-      To enable real team access, paste your Supabase credentials into <code>index.html</code> and push to GitHub.
     </div>` : ''}
     <div class="page-header">
       <div class="page-title">Dashboard</div>
       <div class="page-sub">Current status of all slides and data entries.</div>
     </div>
 
-    ${hs ? `
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:1.5rem;">
-      <div style="background:var(--g);padding:.85rem 1.25rem;display:flex;align-items:center;justify-content:space-between;">
-        <div style="font-size:14px;font-weight:600;color:#fff;">HubSpot live data · ${hs.quarter}</div>
-        <div style="font-size:11px;color:rgba(255,255,255,.75);">Synced ${fmtTs(hs.synced_at)}</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem 1.5rem;margin-bottom:1.5rem;">
+      <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:.75rem;">Welcome to Cake OGSM Platform</div>
+      <div style="font-size:13px;color:var(--ink2);line-height:1.75;">
+        This platform helps the Cake Indonesia Business Team track, manage, and present OGSM data in one place.
+        Revenue and client data is pulled automatically from HubSpot every night -- you can see it in the panel below,
+        filtered by quarter, semester, or month. Growth metrics like QoQ and YoY are calculated automatically so you
+        always have the right numbers for your reports.
       </div>
-      <div style="padding:1.25rem;">
-        <div class="metric-row" style="margin-bottom:1.25rem;">
-          <div class="metric-card"><div class="metric-lbl">Contracted (${hs.quarter})</div><div class="metric-val">${fmtUSD(hs.total_contracted_usd)}</div><div class="metric-sub">${hs.deal_count} deal${hs.deal_count !== 1 ? 's' : ''}</div></div>
-          <div class="metric-card"><div class="metric-lbl">Payments received</div><div class="metric-val">${fmtUSD(hs.total_payments_usd)}</div><div class="metric-sub">cash collected</div></div>
-          <div class="metric-card"><div class="metric-lbl">Avg deal size</div><div class="metric-val">${fmtUSD(hs.avg_deal_usd)}</div></div>
-          <div class="metric-card"><div class="metric-lbl">QoQ growth</div><div class="metric-val" style="color:${hs.qoq_growth_pct >= 0 ? 'var(--g)' : '#e24b4a'}">${fmtPct(hs.qoq_growth_pct)}</div></div>
-          <div class="metric-card"><div class="metric-lbl">YoY growth</div><div class="metric-val" style="color:${hs.yoy_growth_pct >= 0 ? 'var(--g)' : '#e24b4a'}">${fmtPct(hs.yoy_growth_pct)}</div></div>
-        </div>
-        ${hs.top_clients?.length ? `
-        <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:.75rem;">Top clients this quarter</div>
-        <div style="display:flex;flex-direction:column;gap:6px;">
-          ${hs.top_clients.map((c, i) => `
-            <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border-radius:var(--radius);">
-              <div style="font-size:11px;font-weight:600;color:var(--g);width:18px;">${i+1}</div>
-              <div style="flex:1;font-size:13px;color:var(--ink);font-weight:500;">${esc(c.name)}</div>
-              <div style="font-size:13px;font-weight:600;color:var(--ink);">${fmtUSD(c.amount_usd)}</div>
-            </div>`).join('')}
-        </div>` : ''}
+      <div style="font-size:13px;color:var(--ink2);line-height:1.75;margin-top:.75rem;">
+        Use <strong>Data entry</strong> to fill in slide data for your OGSM presentation -- each slide has specific fields
+        defined by your admin, and every save is timestamped so you always know who entered what and when.
+        Use <strong>Apply clicks</strong> to log event performance (webinars, campus visits) and job posting results
+        (views, clicks per listing) -- both feed into the team history log and the top companies chart.
       </div>
-    </div>` : CONFIGURED ? `
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.5rem;text-align:center;">
-      <div style="font-size:13px;color:var(--ink3);margin-bottom:8px;">No HubSpot data yet.</div>
-      <div style="font-size:12px;color:var(--ink3);">Go to GitHub → Actions → <strong>Sync HubSpot to Supabase</strong> → Run workflow to trigger your first sync.</div>
-    </div>` : ''}
+      <div style="font-size:13px;color:var(--ink2);line-height:1.75;margin-top:.75rem;">
+        When your data is ready, hit <strong>Present</strong> in the top bar for a full-screen presentation view,
+        or <strong>Export</strong> to download a standalone HTML file you can share with anyone -- no login required.
+        ${currentRole === 'admin' ? 'As an admin, you can also use <strong>Slide builder</strong> to add new slides or fields at any time as your reporting needs evolve.' : ''}
+      </div>
+    </div>
+
+    <div id="hsPanel">${CONFIGURED ? hsPlaceholder : ''}</div>`;
+
+  // Render slides status immediately
+  const slideStatusHTML = `
     <div class="metric-row">
       <div class="metric-card"><div class="metric-lbl">Total slides</div><div class="metric-val">${slides.length}</div></div>
       <div class="metric-card"><div class="metric-lbl">Slides with data</div><div class="metric-val">${filled}<span style="font-size:14px;font-weight:400;color:var(--ink3)"> / ${slides.length}</span></div></div>
       <div class="metric-card"><div class="metric-lbl">Total entries</div><div class="metric-val">${entries.length}</div></div>
-      <div class="metric-card"><div class="metric-lbl">Last entry</div><div class="metric-val" style="font-size:13px">${entries[0] ? fmtTs(entries[0].ts || entries[0].created_at).split(' · ')[0] : '—'}</div></div>
+      <div class="metric-card"><div class="metric-lbl">Last entry</div><div class="metric-val" style="font-size:13px">${entries[0] ? fmtTs(entries[0].ts || entries[0].created_at).split(' · ')[0] : '--'}</div></div>
     </div>
     <div class="section-title">Slide status</div>
     <div class="status-list">
@@ -714,6 +1511,86 @@ async function renderDashboard() {
         </div>`;
       }).join('') : `<div class="empty-state"><div class="empty-state-text">No slides yet.</div></div>`}
     </div>`;
+
+  el.innerHTML += slideStatusHTML;
+
+  if (!CONFIGURED) return;
+
+  // Load HubSpot data async and inject into panel
+  const hs = await loadHubSpotForPeriod();
+  const hsPanel = document.getElementById('hsPanel');
+  if (!hsPanel) return;
+
+  if (hs) {
+    hsPanel.innerHTML = `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:1.5rem;">
+      <div style="background:var(--g);padding:.85rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div style="font-size:14px;font-weight:600;color:#fff;">HubSpot · ${esc(hs.quarter)}</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${buildPeriodSelector()}
+        </div>
+      </div>
+      <div style="padding:1.25rem;">
+        <div class="metric-row" style="margin-bottom:1.25rem;">
+          <div class="metric-card"><div class="metric-lbl">Contracted</div><div class="metric-val">${fmtUSD(hs.total_contracted_usd)}</div><div class="metric-sub">${hs.deal_count} deal${hs.deal_count !== 1 ? 's' : ''}</div></div>
+          <div class="metric-card"><div class="metric-lbl">Payments received</div><div class="metric-val">${fmtUSD(hs.total_payments_usd)}</div><div class="metric-sub">cash collected</div></div>
+          <div class="metric-card"><div class="metric-lbl">Avg deal size</div><div class="metric-val">${fmtUSD(hs.avg_deal_usd)}</div></div>
+          <div class="metric-card"><div class="metric-lbl">Gap (contracted vs paid)</div><div class="metric-val" style="color:${hs.total_payments_usd >= hs.total_contracted_usd ? 'var(--g)':'#e24b4a'}">${fmtUSD(Math.abs(hs.total_payments_usd - hs.total_contracted_usd))}</div><div class="metric-sub">${hs.total_payments_usd >= hs.total_contracted_usd ? 'overpaid':'outstanding'}</div></div>
+        </div>
+        <div class="metric-row" style="margin-bottom:1.25rem;">
+          <div class="metric-card">
+            <div class="metric-lbl">QoQ growth vs ${esc(hs.qoq_label || 'prev period')}</div>
+            <div class="metric-val" style="color:${(hs.qoq_growth_pct ?? 0) >= 0 ? 'var(--g)' : '#e24b4a'}">${fmtPct(hs.qoq_growth_pct)}</div>
+            <div class="metric-sub">${fmtUSD(hs.qoq_total)} prev period</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-lbl">YoY growth vs ${esc(hs.yoy_label || 'same period last year')}</div>
+            <div class="metric-val" style="color:${(hs.yoy_growth_pct ?? 0) >= 0 ? 'var(--g)' : '#e24b4a'}">${fmtPct(hs.yoy_growth_pct)}</div>
+            <div class="metric-sub">${fmtUSD(hs.yoy_total)} same period LY</div>
+          </div>
+        </div>
+        ${hs.top_clients?.length ? `
+        <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:.75rem;">Top clients -- ${esc(hs.quarter)}</div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${hs.top_clients.map((c, i) => `
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border-radius:var(--radius);">
+              <div style="font-size:11px;font-weight:600;color:var(--g);width:18px;">${i+1}</div>
+              <div style="flex:1;font-size:13px;color:var(--ink);font-weight:500;">${esc(c.name)}</div>
+              <div style="font-size:13px;font-weight:600;color:var(--ink);">${fmtUSD(c.amount_usd)}</div>
+            </div>`).join('')}
+        </div>` : `<div style="font-size:13px;color:var(--ink3);">No contracted deals in this period.</div>`}
+      </div>
+    </div>`;
+  } else {
+    hsPanel.innerHTML = `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.5rem;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">
+        <div style="font-size:13px;color:var(--ink3);">No HubSpot data yet. Run the sync workflow first.</div>
+        ${buildPeriodSelector()}
+      </div>
+    </div>`;
+  }
+
+  // Append slide status below HubSpot panel
+  el.innerHTML += `
+    <div class="metric-row">
+      <div class="metric-card"><div class="metric-lbl">Total slides</div><div class="metric-val">${slides.length}</div></div>
+      <div class="metric-card"><div class="metric-lbl">Slides with data</div><div class="metric-val">${filled}<span style="font-size:14px;font-weight:400;color:var(--ink3)"> / ${slides.length}</span></div></div>
+      <div class="metric-card"><div class="metric-lbl">Total entries</div><div class="metric-val">${entries.length}</div></div>
+      <div class="metric-card"><div class="metric-lbl">Last entry</div><div class="metric-val" style="font-size:13px">${entries[0] ? fmtTs(entries[0].ts || entries[0].created_at).split(' · ')[0] : '--'}</div></div>
+    </div>
+    <div class="section-title">Slide status</div>
+    <div class="status-list">
+      ${slides.length ? slides.map(s => {
+        const e = latestBySlide[s.id];
+        return '<div class="status-item">'
+          + '<div class="status-dot ' + (e ? 'filled' : 'empty') + '"></div>'
+          + '<div class="status-name">' + esc(s.title) + '</div>'
+          + '<div class="status-meta">' + s.fields.length + ' field' + (s.fields.length !== 1 ? 's' : '') + '</div>'
+          + '<div class="status-meta">' + (e ? fmtTs(e.ts || e.created_at).split(' · ')[0] : 'No data yet') + '</div>'
+          + '</div>';
+      }).join('') : '<div class="empty-state"><div class="empty-state-text">No slides yet.</div></div>'}
+    </div>`;
 }
 
 // Builder
@@ -726,44 +1603,129 @@ function renderBuilder() {
       <div class="page-sub">Add slides and define the fields your team fills in each quarter or event.</div>
     </div>
     <div class="slide-list">
-      ${slides.map(renderSlideCard).join('')}
+      ${slides.map(function(s, i) { return renderSlideCard(s, i); }).join('')}
       ${!slides.length ? `<div class="empty-state"><div class="empty-state-text">No slides yet.</div></div>` : ''}
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:1.25rem;padding:10px 14px;background:var(--color-background-secondary, var(--surface));border-radius:var(--radius);border:1px solid var(--border);">
+      <div>
+        <div style="font-size:13px;font-weight:500;color:var(--ink);">Global presentation theme</div>
+        <div style="font-size:11px;color:var(--ink3);">Applied to all slides unless overridden per-slide above</div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="setGlobalTheme('light')" style="padding:6px 14px;font-size:12px;font-weight:500;border-radius:7px;border:1px solid var(--border);cursor:pointer;background:${globalTheme==='light' ? '#1db954' : 'var(--card)'};color:${globalTheme==='light' ? '#fff' : 'var(--ink)'};">Light</button>
+        <button onclick="setGlobalTheme('dark')"  style="padding:6px 14px;font-size:12px;font-weight:500;border-radius:7px;border:1px solid var(--border);cursor:pointer;background:${globalTheme==='dark'  ? '#1db954' : 'var(--card)'};color:${globalTheme==='dark'  ? '#fff' : 'var(--ink)'};">Dark</button>
+        <button onclick="setGlobalTheme('cake')"  style="padding:6px 14px;font-size:12px;font-weight:500;border-radius:7px;border:1px solid var(--border);cursor:pointer;background:${globalTheme==='cake'  ? '#1db954' : 'var(--card)'};color:${globalTheme==='cake'  ? '#fff' : 'var(--ink)'};">Cake Green</button>
+      </div>
     </div>
     <div class="section-title">Add new slide</div>
     <div class="add-slide-row">
-      <input type="text" id="newSlideTitle" placeholder="e.g. 'Event: Young Talent June 2026'">
+      <input type="text" id="newSlideTitle" placeholder="e.g. 'Revenue Summary Q2 2026'">
+      <select id="newSlideLayout" style="padding:9px 12px;font-size:13px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--ink);">
+        <option value="data">Data slide</option>
+        <option value="title">Title / Divider slide</option>
+        <option value="event">Event slide</option>
+      </select>
       <button class="btn btn-primary" onclick="addSlide()">+ Add slide</button>
     </div>`;
 }
 
-function renderSlideCard(s) {
-  return `<div class="slide-card">
+function renderSlideCard(s, idx) {
+  const isFirst = idx === 0;
+  const isLast  = idx === slides.length - 1;
+  return `<div class="slide-card" id="sc_${s.id}">
     <div class="slide-card-header" id="sh_${s.id}" onclick="toggleSlide('${s.id}')">
-      <div class="slide-card-title">${esc(s.title)}</div>
+      <div style="display:flex;flex-direction:column;gap:2px;margin-right:4px;">
+        <button class="btn-icon-sm" style="padding:1px 5px;font-size:11px;${isFirst ? 'opacity:.3;cursor:default;' : ''}" onclick="event.stopPropagation();${isFirst ? '' : 'moveSlide(\'' + s.id + '\', -1)'}" title="Move up">^</button>
+        <button class="btn-icon-sm" style="padding:1px 5px;font-size:11px;${isLast ? 'opacity:.3;cursor:default;' : ''}" onclick="event.stopPropagation();${isLast ? '' : 'moveSlide(\'' + s.id + '\', 1)'}" title="Move down">v</button>
+      </div>
+      <div style="font-size:11px;color:var(--ink3);font-weight:500;min-width:20px;">${idx + 1}</div>
+      <div class="slide-card-title" style="cursor:text;" title="Click to edit title"
+        onclick="event.stopPropagation(); startEditTitle('${s.id}', this)"
+        id="st_${s.id}">${esc(s.title)}</div>
+      <div style="font-size:10px;font-weight:500;padding:2px 8px;border-radius:99px;background:${(s.layout||'data')==='title' ? '#E6F1FB' : 'var(--g-light)'};color:${(s.layout||'data')==='title' ? '#185FA5' : 'var(--gd)'};">${(s.layout||'data')==='title' ? 'Title slide' : (s.layout||'data')==='event' ? 'Event slide' : 'Data slide'}</div>
+      <select onchange="event.stopPropagation(); changeSlideLayout('${s.id}', this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);">
+        <option value="data"  ${(s.layout||'data')==='data'  ? 'selected' : ''}>Data</option>
+        <option value="title" ${(s.layout||'data')==='title' ? 'selected' : ''}>Title</option>
+        <option value="event" ${(s.layout||'data')==='event' ? 'selected' : ''}>Event</option>
+      </select>
+      <select onchange="event.stopPropagation(); setSlideTheme('${s.id}', this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);" title="Slide theme">
+        <option value="global" ${!s.theme ? 'selected' : ''}>Theme: Global</option>
+        <option value="light"  ${s.theme==='light'  ? 'selected' : ''}>Light</option>
+        <option value="dark"   ${s.theme==='dark'   ? 'selected' : ''}>Dark</option>
+        <option value="cake"   ${s.theme==='cake'   ? 'selected' : ''}>Cake Green</option>
+      </select>
       <div class="slide-card-count">${s.fields.length} field${s.fields.length !== 1 ? 's' : ''}</div>
       <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); deleteSlide('${s.id}')">Delete</button>
       <span style="color:var(--ink3); font-size:12px">&#8964;</span>
     </div>
     <div class="slide-card-body" id="sb_${s.id}">
+      <div id="ev_quick_block_${s.id}" style="display:${(s.layout||'data')==='event' ? 'block' : 'none'}">
+        <div style="background:var(--g-light);border:1px solid var(--g);border-radius:8px;padding:10px 12px;margin-bottom:10px;">
+          <div style="font-size:12px;font-weight:500;color:var(--gd);margin-bottom:8px;">Quick setup from event</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <select id="ev_quick_${s.id}" style="flex:1;min-width:160px;padding:6px 10px;font-size:12px;border:1px solid var(--border);border-radius:7px;background:var(--card);color:var(--ink);">
+              <option value="">-- Pick an event to auto-setup fields --</option>
+              ${getEventNames().map(n => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('')}
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();quickSetupEvent('${s.id}')">Setup fields</button>
+          </div>
+          <div style="font-size:11px;color:var(--ink3);margin-top:6px;">Picks an event and adds all available fields. You can delete the ones you don't need after.</div>
+          ${getEventNames().length === 0 ? '<div style="font-size:11px;color:#e24b4a;margin-top:4px;">No events logged yet. Add events in Apply clicks first.</div>' : ''}
+        </div>
+      </div>
       <div class="field-pill-list">
         ${s.fields.map(f => `
           <div class="field-pill">
-            <div class="field-pill-label">${esc(f.label)}</div>
+            <div style="display:flex;flex-direction:column;gap:1px;margin-right:2px;">
+              <button class="btn-icon-sm" style="padding:0 4px;font-size:10px;line-height:1.4;"
+                onclick="event.stopPropagation();moveField('${s.id}','${f.id}',-1)" title="Move up">^</button>
+              <button class="btn-icon-sm" style="padding:0 4px;font-size:10px;line-height:1.4;"
+                onclick="event.stopPropagation();moveField('${s.id}','${f.id}',1)" title="Move down">v</button>
+            </div>
+            <div class="field-pill-label" style="cursor:text;" title="Click to edit label"
+              onclick="event.stopPropagation();startEditFieldLabel('${s.id}','${f.id}',this)"
+              id="fl_label_${f.id}">${esc(f.label)}</div>
             <div class="field-pill-type">${f.type}</div>
-            <button class="btn-icon-sm" onclick="deleteField('${s.id}', '${f.id}')">✕</button>
+            <button class="btn-icon-sm" onclick="deleteField('${s.id}', '${f.id}')">&#10005;</button>
           </div>`).join('')}
-        ${!s.fields.length ? `<div style="font-size:12px;color:var(--ink3);padding:4px 0">No fields yet — add one below.</div>` : ''}
+        ${!s.fields.length ? `<div style="font-size:12px;color:var(--ink3);padding:4px 0">No fields yet -- add one below.</div>` : ''}
       </div>
       <div class="add-field-row">
-        <input type="text" id="fn_${s.id}" placeholder="Field label e.g. 'Event registrations'"
-          onkeydown="if(event.key==='Enter') addField('${s.id}')">
+        <input type="text" id="fn_${s.id}" placeholder="Field label" onkeydown="if(event.key==='Enter') addField('${s.id}')">
         <select id="ft_${s.id}">
-          <option value="number">Number</option>
-          <option value="text">Text</option>
-          <option value="percent">Percent</option>
-          <option value="currency">Currency (USD)</option>
-          <option value="date">Date</option>
-          <option value="url">URL</option>
+          <optgroup label="Manual input">
+            <option value="number">Number</option>
+            <option value="text">Text</option>
+            <option value="percent">Percent</option>
+            <option value="currency">Currency (USD)</option>
+            <option value="date">Date</option>
+            <option value="url">URL</option>
+          <option value="image">Image (upload)</option>
+          </optgroup>
+          <optgroup label="Live: HubSpot (auto-filled)">
+            <option value="hs_contracted">HubSpot: Contracted revenue</option>
+            <option value="hs_payments">HubSpot: Payments received</option>
+            <option value="hs_deals">HubSpot: Deal count</option>
+            <option value="hs_avg_deal">HubSpot: Avg deal size</option>
+            <option value="hs_qoq">HubSpot: QoQ growth</option>
+            <option value="hs_yoy">HubSpot: YoY growth</option>
+            <option value="hs_top_clients">HubSpot: Top clients list</option>
+          </optgroup>
+          <optgroup label="Live: Apply clicks (auto-filled)">
+            <option value="ac_total">Apply clicks: Total</option>
+            <option value="ac_top_companies">Apply clicks: Top companies</option>
+            <option value="ac_events">Apply clicks: Event summary (all)</option>
+          </optgroup>
+          <optgroup label="Live: Specific event (auto-filled)">
+            <option value="ev_name">Event: Name</option>
+            <option value="ev_dates">Event: Date(s)</option>
+            <option value="ev_company">Event: Company</option>
+            <option value="ev_registrations">Event: Registrations</option>
+            <option value="ev_attendees">Event: Attendees</option>
+            <option value="ev_attendance_rate">Event: Attendance rate</option>
+            <option value="ev_clicks">Event: Apply clicks</option>
+            <option value="ev_note">Event: Notes</option>
+          </optgroup>
         </select>
         <button class="btn btn-primary btn-sm" onclick="addField('${s.id}')">+ Add field</button>
       </div>
@@ -776,11 +1738,235 @@ function toggleSlide(id) {
   document.getElementById('sh_' + id)?.classList.toggle('open');
 }
 
+function startEditTitle(id, el) {
+  const s = slides.find(function(sl){ return sl.id === id; });
+  if (!s) return;
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.value = s.title;
+  inp.style.cssText = 'width:100%;padding:2px 6px;font-size:13px;font-weight:600;border:1px solid var(--g);border-radius:4px;background:var(--card);color:var(--ink);';
+  inp.onblur = function() { saveEditTitle(id, inp.value, el); };
+  inp.onkeydown = function(e) {
+    if (e.key === 'Enter') inp.blur();
+    if (e.key === 'Escape') { el.textContent = s.title; }
+  };
+  el.textContent = '';
+  el.appendChild(inp);
+  inp.focus();
+  inp.select();
+}
+
+async function saveEditTitle(id, newTitle, el) {
+  const s = slides.find(function(sl){ return sl.id === id; });
+  if (!s) return;
+  const title = newTitle.trim();
+  if (!title) { el.textContent = s.title; return; }
+  s.title = title;
+  el.textContent = title;
+  await saveSlide(s);
+  renderEntry();
+  showToast('Title updated');
+}
+
+// All available event fields
+const EV_FIELDS = [
+  { label: 'Event name',       type: 'ev_name'            },
+  { label: 'Event date(s)',    type: 'ev_dates'            },
+  { label: 'Company',          type: 'ev_company'          },
+  { label: 'Registrations',    type: 'ev_registrations'    },
+  { label: 'Attendees',        type: 'ev_attendees'        },
+  { label: 'Attendance rate',  type: 'ev_attendance_rate'  },
+  { label: 'Apply clicks',     type: 'ev_clicks'           },
+  { label: 'Notes',            type: 'ev_note'             },
+];
+
+async function quickSetupEvent(slideId) {
+  const s = slides.find(function(sl){ return sl.id === slideId; });
+  if (!s) return;
+  const sel = document.getElementById('ev_quick_' + slideId);
+  const evName = sel ? sel.value : '';
+  if (!evName) { showToast('Please pick an event first'); return; }
+
+  // Show a field selection dialog
+  const ev = getEventByName(evName);
+  if (!ev) { showToast('Event not found'); return; }
+
+  // Build checklist of available fields
+  const available = EV_FIELDS.filter(function(f) {
+    if (f.type === 'ev_name')            return !!(ev.title || ev.company);
+    if (f.type === 'ev_dates')           return !!(ev.event_date || ev.eventDate);
+    if (f.type === 'ev_company')         return !!ev.company;
+    if (f.type === 'ev_registrations')   return !!(parseInt(ev.registrations));
+    if (f.type === 'ev_attendees')       return !!(parseInt(ev.attendees));
+    if (f.type === 'ev_attendance_rate') return !!(parseInt(ev.registrations) && parseInt(ev.attendees));
+    if (f.type === 'ev_clicks')          return !!(parseInt(ev.apply_clicks || ev.applyClicks));
+    if (f.type === 'ev_note')            return !!ev.note;
+    return true;
+  });
+
+  // Show modal
+  const existing = document.getElementById('ev_setup_modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'ev_setup_modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:flex;align-items:center;justify-content:center;padding:1rem;';
+  modal.innerHTML = '<div style="background:var(--card);border-radius:var(--radius-lg);padding:1.5rem;max-width:420px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.2);">'
+    + '<div style="font-size:16px;font-weight:600;color:var(--ink);margin-bottom:4px;">Setup event fields</div>'
+    + '<div style="font-size:12px;color:var(--ink3);margin-bottom:1rem;">Select which fields to add for <strong>' + esc(evName) + '</strong>. Uncheck any you do not need.</div>'
+    + '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:1.25rem;">'
+    + available.map(function(f) {
+        return '<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surface);border-radius:8px;cursor:pointer;">'
+          + '<input type="checkbox" value="' + f.type + '" checked style="width:16px;height:16px;accent-color:var(--g);">'
+          + '<span style="font-size:13px;color:var(--ink);">' + f.label + '</span>'
+          + '</label>';
+      }).join('')
+    + '</div>'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end;">'
+    + '<button onclick="document.getElementById(\'ev_setup_modal\').remove()" style="padding:8px 16px;font-size:13px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--ink);cursor:pointer;">Cancel</button>'
+    + '<button onclick="confirmQuickSetup(this)" data-slide="' + slideId + '" data-ev="' + encodeURIComponent(evName) + '" style="padding:8px 16px;font-size:13px;font-weight:500;border:none;border-radius:8px;background:var(--g);color:#fff;cursor:pointer;">Add fields</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(modal);
+}
+
+async function confirmQuickSetup(btn) {
+  const slideId = btn ? btn.getAttribute('data-slide') : '';
+  const evName  = btn ? decodeURIComponent(btn.getAttribute('data-ev') || '') : '';
+  const s = slides.find(function(sl){ return sl.id === slideId; });
+  if (!s) return;
+
+  const modal = document.getElementById('ev_setup_modal');
+  const checked = modal ? Array.from(modal.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){ return cb.value; }) : [];
+  if (modal) modal.remove();
+  if (!checked.length) { showToast('No fields selected'); return; }
+
+  // Remove existing ev_ fields to avoid duplicates
+  s.fields = s.fields.filter(function(f){ return !f.type.startsWith('ev_'); });
+
+  // Add selected fields
+  checked.forEach(function(type) {
+    const def = EV_FIELDS.find(function(f){ return f.type === type; });
+    if (def) s.fields.push({ id: uid(), label: def.label, type: def.type });
+  });
+
+  await saveSlide(s);
+
+  // Pre-save entry with event picker set to evName
+  // so user doesn't have to manually pick in data entry
+  const existingEntry = entries.find(function(en){ return (en.slideId || en.slide_id) === slideId; });
+  const entryData = existingEntry ? Object.assign({}, existingEntry.data || {}) : {};
+
+  // Set _event_pick_ for all ev_ fields
+  s.fields.filter(function(f){ return f.type.startsWith('ev_'); }).forEach(function(f) {
+    entryData['_event_pick_' + f.id] = evName;
+  });
+
+  const entry = {
+    id: uid(), slideId: slideId, slideTitle: s.title,
+    data: entryData, period: '', note: 'Auto-setup from event: ' + evName,
+    by: currentRole === 'admin' ? 'Admin' : 'Team', ts: tsNow()
+  };
+  entries.unshift(entry);
+  await saveEntry(entry);
+
+  renderAll();
+  // Re-open the slide panel
+  document.getElementById('sb_' + slideId)?.classList.add('open');
+  document.getElementById('sh_' + slideId)?.classList.add('open');
+  showToast('Fields added and event linked!');
+}
+
+async function moveField(slideId, fieldId, direction) {
+  const s = slides.find(function(sl){ return sl.id === slideId; });
+  if (!s) return;
+  const idx = s.fields.findIndex(function(f){ return f.id === fieldId; });
+  if (idx < 0) return;
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= s.fields.length) return;
+  const temp = s.fields[idx];
+  s.fields[idx] = s.fields[newIdx];
+  s.fields[newIdx] = temp;
+  await saveSlide(s);
+  renderBuilder();
+  renderEntry();
+  // Re-open the slide panel
+  document.getElementById('sb_' + slideId)?.classList.add('open');
+  document.getElementById('sh_' + slideId)?.classList.add('open');
+  showToast('Field moved');
+}
+
+function startEditFieldLabel(slideId, fieldId, el) {
+  const s = slides.find(function(sl){ return sl.id === slideId; });
+  if (!s) return;
+  const f = s.fields.find(function(fi){ return fi.id === fieldId; });
+  if (!f) return;
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.value = f.label;
+  inp.style.cssText = 'width:100%;padding:2px 6px;font-size:12px;border:1px solid var(--g);border-radius:4px;background:var(--card);color:var(--ink);';
+  inp.onblur = function() { saveFieldLabel(slideId, fieldId, inp.value, el); };
+  inp.onkeydown = function(e) {
+    if (e.key === 'Enter') inp.blur();
+    if (e.key === 'Escape') { el.textContent = f.label; }
+  };
+  el.textContent = '';
+  el.appendChild(inp);
+  inp.focus();
+  inp.select();
+}
+
+async function saveFieldLabel(slideId, fieldId, newLabel, el) {
+  const s = slides.find(function(sl){ return sl.id === slideId; });
+  if (!s) return;
+  const f = s.fields.find(function(fi){ return fi.id === fieldId; });
+  if (!f) return;
+  const label = newLabel.trim();
+  if (!label) { el.textContent = f.label; return; }
+  f.label = label;
+  el.textContent = label;
+  await saveSlide(s);
+  renderEntry();
+  showToast('Field label updated');
+}
+
+async function changeSlideLayout(id, layout) {
+  const s = slides.find(function(sl) { return sl.id === id; });
+  if (!s) return;
+  s.layout = layout;
+  await saveSlide(s);
+  renderBuilder();
+  showToast('Layout updated');
+}
+
+async function moveSlide(id, direction) {
+  const idx = slides.findIndex(function(s) { return s.id === id; });
+  if (idx === -1) return;
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= slides.length) return;
+
+  // Swap slides
+  const temp = slides[idx];
+  slides[idx]    = slides[newIdx];
+  slides[newIdx] = temp;
+
+  // Update positions
+  slides.forEach(function(s, i) { s.position = i; });
+
+  // Save both affected slides
+  await Promise.all([saveSlide(slides[idx]), saveSlide(slides[newIdx])]);
+
+  renderBuilder();
+  renderEntry();
+  showToast('Slide moved');
+}
+
 async function addSlide() {
-  const inp = document.getElementById('newSlideTitle');
-  const title = inp.value.trim();
+  const inp    = document.getElementById('newSlideTitle');
+  const layout = document.getElementById('newSlideLayout');
+  const title  = inp.value.trim();
   if (!title) { showToast('Enter a slide title'); return; }
-  const s = { id: uid(), title, fields: [], position: slides.length };
+  const s = { id: uid(), title, fields: [], position: slides.length, layout: layout ? layout.value : 'data' };
   slides.push(s);
   await saveSlide(s);
   inp.value = '';
@@ -831,7 +2017,7 @@ function renderEntry() {
   if (!slides.length) {
     el.innerHTML = `<div class="page-header"><div class="page-title">Data entry</div></div>
       <div class="empty-state"><div class="empty-state-text">
-        ${currentRole === 'admin' ? 'No slides yet — create some in Slide builder.' : 'No slides set up yet. Ask your admin to create slides first.'}
+        ${currentRole === 'admin' ? 'No slides yet -- create some in Slide builder.' : 'No slides set up yet. Ask your admin to create slides first.'}
       </div></div>`;
     return;
   }
@@ -856,8 +2042,50 @@ function renderEntry() {
           <input type="text" id="ef_period" placeholder="Period / event e.g. 'Q2 2026' or 'June Talent Webinar'">
           <input type="text" id="ef_note"   placeholder="Note (optional)">
         </div>
-        ${active.fields.map(f => `
-          <div class="entry-field">
+        ${active.fields.map(f => {
+          const isLive = f.type.startsWith('hs_') || f.type.startsWith('ac_') || f.type.startsWith('ev_');
+          const liveLabel = {
+            hs_contracted:    'HubSpot: Contracted revenue',
+            hs_payments:      'HubSpot: Payments received',
+            hs_deals:         'HubSpot: Deal count',
+            hs_avg_deal:      'HubSpot: Avg deal size',
+            hs_qoq:           'HubSpot: QoQ growth',
+            hs_yoy:           'HubSpot: YoY growth',
+            hs_top_clients:   'HubSpot: Top clients list',
+            ac_total:         'Apply clicks: Total',
+            ac_top_companies: 'Apply clicks: Top companies',
+            ac_events:        'Apply clicks: Event summary',
+            ev_name:          'Event: Name',
+            ev_dates:         'Event: Date(s)',
+            ev_company:       'Event: Company',
+            ev_registrations: 'Event: Registrations',
+            ev_attendees:     'Event: Attendees',
+            ev_attendance_rate: 'Event: Attendance rate',
+            ev_clicks:        'Event: Apply clicks',
+            ev_note:          'Event: Notes',
+          }[f.type] || f.type;
+          if (isLive) {
+            const isEvField = f.type.startsWith('ev_');
+            const eventNames = isEvField ? getEventNames() : [];
+            const savedEvent = isEvField && latest?.data ? (latest.data['_event_pick_' + f.id] || '') : '';
+            return `<div class="entry-field">
+              <label>${esc(f.label)} <span>(${f.type})</span></label>
+              <div style="padding:8px 12px;background:var(--g-light);border:1px solid var(--g);border-radius:8px;font-size:12px;color:var(--gd);display:flex;align-items:center;gap:8px;">
+                <span style="font-size:16px;">&#9889;</span>
+                <div><strong>Live field</strong> -- ${liveLabel}<br>
+                <span style="font-size:11px;opacity:.8;">This field is auto-filled from live data. No manual input needed.</span></div>
+              </div>
+              ${isEvField ? `<div style="margin-top:6px;">
+                <label style="font-size:11px;color:var(--ink2);display:block;margin-bottom:3px;">Which event? (pick one)</label>
+                <select id="ev_pick_${f.id}" style="width:100%;padding:7px 10px;font-size:12px;border:1px solid var(--border);border-radius:7px;background:var(--card);color:var(--ink);">
+                  <option value="">-- Select event --</option>
+                  ${eventNames.map(n => '<option value="' + esc(n) + '"' + (n === savedEvent ? ' selected' : '') + '>' + esc(n) + '</option>').join('')}
+                </select>
+                ${eventNames.length === 0 ? '<div style="font-size:11px;color:#e24b4a;margin-top:4px;">No events logged yet. Add events in the Apply clicks tab first.</div>' : ''}
+              </div>` : ''}
+            </div>`;
+          }
+          return `<div class="entry-field">
             <label>${esc(f.label)} <span>(${f.type})</span></label>
             ${f.type === 'text'
               ? `<textarea id="ef_${f.id}" placeholder="${esc(f.label)}">${latest?.data?.[f.id] ?? ''}</textarea>`
@@ -865,12 +2093,35 @@ function renderEntry() {
               ? `<input type="date" id="ef_${f.id}" value="${latest?.data?.[f.id] ?? ''}">`
               : f.type === 'url'
               ? `<input type="url" id="ef_${f.id}" placeholder="https://" value="${esc(latest?.data?.[f.id] ?? '')}">`
+              : f.type === 'image'
+              ? `<div>
+                  <div style="font-size:12px;color:var(--ink2);margin-bottom:8px;line-height:1.6;">
+                    Upload one or more images. They are stored securely and only visible to signed-in team members.
+                  </div>
+                  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+                    <label style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;font-size:12px;font-weight:500;border-radius:8px;border:1px solid var(--g);background:var(--g-light);color:var(--gd);cursor:pointer;">
+                      + Add image(s)
+                      <input type="file" accept="image/*" multiple style="display:none;" onchange="uploadSlideImage(this, '${f.id}', '${active.id}')">
+                    </label>
+                    <span id="img_status_${f.id}" style="font-size:11px;color:var(--ink3);"></span>
+                  </div>
+                  <div id="img_prev_${f.id}" style="display:flex;flex-wrap:wrap;gap:8px;">
+                    ${(latest?.data?.[f.id] ? (Array.isArray(JSON.parse(latest.data[f.id] || '[]')) ? JSON.parse(latest.data[f.id]) : [latest.data[f.id]]) : []).map((url, idx) =>
+                      url ? '<div style="position:relative;display:inline-block;">'
+                        + '<img src="' + esc(url) + '" style="width:120px;height:90px;border-radius:8px;border:1px solid var(--border);object-fit:cover;" onerror="this.hidden=true">'
+                        + '<button onclick="removeSlideImage(\'' + f.id + '\', ' + idx + ')" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:99px;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:1;">x</button>'
+                        + '</div>' : ''
+                    ).join('')}
+                  </div>
+                  <input type="hidden" id="ef_${f.id}" value="${esc(latest?.data?.[f.id] ?? '[]')}">
+                </div>`
               : `<input type="number" id="ef_${f.id}" placeholder="0" value="${latest?.data?.[f.id] ?? ''}">`
             }
-          </div>`).join('')}
+          </div>`;
+        }).join('')}
         ${!active.fields.length ? `<p style="font-size:13px;color:var(--ink3)">No fields defined for this slide yet.</p>` : ''}
         <div class="entry-submit-row">
-          <button class="btn btn-primary" onclick="submitEntry()">✓ Save entry</button>
+          <button class="btn btn-primary" onclick="submitEntry()">&#10003; Save entry</button>
           <span class="entry-submit-hint">Timestamped · visible in History</span>
         </div>
       </div>
@@ -879,6 +2130,73 @@ function renderEntry() {
 
 function selectSlide(id) { activeSlideId = id; renderEntry(); }
 
+// ─── Supabase image upload ─────────────────────────────────────
+async function uploadSlideImage(input, fieldId, slideId) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+
+  const statusEl = document.getElementById('img_status_' + fieldId);
+  const hiddenEl = document.getElementById('ef_' + fieldId);
+  const prevEl   = document.getElementById('img_prev_' + fieldId);
+
+  if (statusEl) statusEl.textContent = 'Uploading ' + files.length + ' image(s)...';
+
+  // Get existing URLs
+  var existing = [];
+  try { existing = JSON.parse(hiddenEl ? hiddenEl.value || '[]' : '[]'); } catch(e) { existing = []; }
+  if (!Array.isArray(existing)) existing = existing ? [existing] : [];
+
+  var uploaded = 0;
+  for (var fi = 0; fi < files.length; fi++) {
+    var file = files[fi];
+    if (file.size > 10 * 1024 * 1024) {
+      if (statusEl) statusEl.textContent = file.name + ' too large (max 10MB), skipped.';
+      continue;
+    }
+    try {
+      var ext      = file.name.split('.').pop();
+      var fileName = slideId + '_' + fieldId + '_' + Date.now() + '_' + fi + '.' + ext;
+      var upResult = await _supabase.storage.from('ogsm-images').upload(fileName, file, { upsert: true, contentType: file.type });
+      if (upResult.error) { console.error(upResult.error); continue; }
+      var signResult = await _supabase.storage.from('ogsm-images').createSignedUrl(fileName, 60 * 60 * 24 * 365 * 10);
+      var url = signResult.data && signResult.data.signedUrl ? signResult.data.signedUrl : '';
+      if (url) { existing.push(url); uploaded++; }
+    } catch(e) { console.error(e); }
+  }
+
+  if (hiddenEl) hiddenEl.value = JSON.stringify(existing);
+  if (statusEl) statusEl.textContent = uploaded + ' image(s) uploaded';
+  setTimeout(function() { if (statusEl) statusEl.textContent = ''; }, 3000);
+
+  // Refresh preview grid
+  if (prevEl) {
+    prevEl.innerHTML = existing.map(function(url, idx) {
+      return url ? '<div style="position:relative;display:inline-block;">'
+        + '<img src="' + url + '" style="width:120px;height:90px;border-radius:8px;border:1px solid var(--border);object-fit:cover;" onerror="this.hidden=true">'
+        + '<button onclick="removeSlideImage(' + JSON.stringify(fieldId) + ',' + idx + ')" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:99px;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:1;">x</button>'
+        + '</div>' : '';
+    }).join('');
+  }
+}
+
+function removeSlideImage(fieldId, idx) {
+  const hiddenEl = document.getElementById('ef_' + fieldId);
+  const prevEl   = document.getElementById('img_prev_' + fieldId);
+  var urls = [];
+  try { urls = JSON.parse(hiddenEl ? hiddenEl.value || '[]' : '[]'); } catch(e) { urls = []; }
+  if (!Array.isArray(urls)) urls = urls ? [urls] : [];
+  urls.splice(idx, 1);
+  if (hiddenEl) hiddenEl.value = JSON.stringify(urls);
+  if (prevEl) {
+    prevEl.innerHTML = urls.map(function(url, i) {
+      return url ? '<div style="position:relative;display:inline-block;">'
+        + '<img src="' + url + '" style="width:120px;height:90px;border-radius:8px;border:1px solid var(--border);object-fit:cover;" onerror="this.hidden=true">'
+        + '<button onclick="removeSlideImage(' + JSON.stringify(fieldId) + ',' + i + ')" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:99px;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:1;">x</button>'
+        + '</div>' : '';
+    }).join('');
+  }
+}
+
 async function submitEntry() {
   const active = slides.find(s => s.id === activeSlideId);
   if (!active) return;
@@ -886,6 +2204,11 @@ async function submitEntry() {
   active.fields.forEach(f => {
     const inp = document.getElementById('ef_' + f.id);
     if (inp) data[f.id] = inp.value.trim();
+    // Save event picker selection for ev_ fields
+    if (f.type.startsWith('ev_')) {
+      const pick = document.getElementById('ev_pick_' + f.id);
+      if (pick) data['_event_pick_' + f.id] = pick.value;
+    }
   });
   const entry = {
     id: uid(), slideId: active.id, slideTitle: active.title,
@@ -898,7 +2221,7 @@ async function submitEntry() {
   entries.unshift(entry);
   await saveEntry(entry);
   renderAll();
-  showToast('Entry saved ✓');
+  showToast('Entry saved &#10003;');
 }
 
 // History
@@ -940,7 +2263,7 @@ function renderHistItem(e) {
       ${s ? s.fields.map(f => `
         <div class="hist-field">
           <div class="hist-field-label">${esc(f.label)}</div>
-          <div class="hist-field-value">${esc(e.data?.[f.id]) || '—'}</div>
+          <div class="hist-field-value">${esc(e.data?.[f.id]) || '--'}</div>
         </div>`).join('') : ''}
     </div>
   </div>`;
@@ -970,41 +2293,309 @@ async function clearAll() {
 }
 
 // Presentation
-function buildPresHTML() {
+// --- Live field resolver --------------------------------------
+let _liveCache = null;
+
+async function resolveLiveData() {
+  if (_liveCache) return _liveCache;
+  const hs = await loadHubSpotForPeriod();
+  const totalClicks = clickEntries.reduce(function(s,e) { return s + (parseInt(e.apply_clicks || e.applyClicks) || 0); }, 0);
+  const byCompany = {};
+  clickEntries.forEach(function(e) {
+    const co = e.company || 'Unknown';
+    byCompany[co] = (byCompany[co] || 0) + (parseInt(e.apply_clicks || e.applyClicks) || 0);
+  });
+  const topCo = Object.entries(byCompany).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+  const events = clickEntries.filter(function(e){return (e.entry_type||e.type)==='event';});
+
+  _liveCache = { hs, totalClicks, topCo, events };
+  return _liveCache;
+}
+
+function resolveLiveField(type, live, snapshot, ctx) {
+  const hs = live ? live.hs : null;
+  if (!hs && type.startsWith('hs_')) return snapshot ? '[No HubSpot data]' : '<span style="color:#aaa;font-style:italic;">No HubSpot data for this period</span>';
+
+  const period = hs ? hs.quarter : '';
+
+  if (type === 'hs_contracted')  return snapshot ? fmtUSD(hs.total_contracted_usd) + ' (' + period + ')' : fmtUSD(hs.total_contracted_usd);
+  if (type === 'hs_payments')    return snapshot ? fmtUSD(hs.total_payments_usd) + ' (' + period + ')' : fmtUSD(hs.total_payments_usd);
+  if (type === 'hs_deals')       return (hs.deal_count || 0) + ' deals';
+  if (type === 'hs_avg_deal')    return fmtUSD(hs.avg_deal_usd);
+  if (type === 'hs_qoq')        return fmtPct(hs.qoq_growth_pct) + (hs.qoq_label ? ' vs ' + hs.qoq_label : '');
+  if (type === 'hs_yoy')        return fmtPct(hs.yoy_growth_pct) + (hs.yoy_label ? ' vs ' + hs.yoy_label : '');
+  if (type === 'hs_top_clients') {
+    if (!hs.top_clients || !hs.top_clients.length) return 'No clients yet';
+    if (snapshot) return hs.top_clients.map(function(c,i){return (i+1)+'. '+c.name+' ('+fmtUSD(c.amount_usd)+')';}).join(' | ');
+    return hs.top_clients.map(function(c,i) {
+      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.1);">'
+        + '<span style="font-size:11px;font-weight:600;color:rgba(255,255,255,.6);width:16px;">' + (i+1) + '</span>'
+        + '<span style="flex:1;font-size:13px;">' + esc(c.name) + '</span>'
+        + '<span style="font-size:13px;font-weight:600;">' + fmtUSD(c.amount_usd) + '</span>'
+        + '</div>';
+    }).join('');
+  }
+  if (type === 'ac_total') return (live.totalClicks || 0).toLocaleString() + ' apply clicks';
+  if (type === 'ac_top_companies') {
+    if (!live.topCo || !live.topCo.length) return 'No data yet';
+    if (snapshot) return live.topCo.map(function(c,i){return (i+1)+'. '+c[0]+' ('+c[1].toLocaleString()+')';}).join(' | ');
+    return live.topCo.map(function(c,i) {
+      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">'
+        + '<span style="font-size:11px;font-weight:600;color:rgba(255,255,255,.6);width:16px;">' + (i+1) + '</span>'
+        + '<span style="flex:1;font-size:13px;">' + esc(c[0]) + '</span>'
+        + '<span style="font-size:13px;font-weight:600;">' + c[1].toLocaleString() + '</span>'
+        + '</div>';
+    }).join('');
+  }
+  if (type === 'ac_events') {
+    if (!live.events || !live.events.length) return 'No events logged yet';
+    if (snapshot) return live.events.map(function(e){ return (e.title||e.company) + ': ' + (e.registrations||0) + ' regs, ' + (e.attendees||0) + ' attended'; }).join(' | ');
+    return live.events.map(function(e) {
+      const regs = parseInt(e.registrations) || 0;
+      const att  = parseInt(e.attendees) || 0;
+      const rate = regs > 0 ? Math.round(att/regs*100) + '%' : '--';
+      return '<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.1);">'
+        + '<div style="font-size:13px;font-weight:500;">' + esc(e.title || e.company) + '</div>'
+        + '<div style="font-size:11px;color:rgba(255,255,255,.65);margin-top:2px;">'
+        + (e.period ? e.period + ' · ' : '')
+        + formatEventDate(e)
+        + (regs ? regs.toLocaleString() + ' registrations · ' : '')
+        + (att  ? att.toLocaleString() + ' attended (' + rate + ')' : '')
+        + '</div></div>';
+    }).join('');
+  }
+
+  // ─── Specific event fields ────────────────────────────────
+  if (type.startsWith('ev_')) {
+    var evName = ctx && ctx._evName ? ctx._evName : '';
+    var ev = evName ? getEventByName(evName) : (live && live.events && live.events[0]);
+    if (!ev) return snapshot ? 'No event selected' : '<span style="color:rgba(255,255,255,.4);font-style:italic;">No event selected. Pick one in Data entry.</span>';
+    const regs = parseInt(ev.registrations) || 0;
+    const att  = parseInt(ev.attendees)     || 0;
+    const rate = regs > 0 ? Math.round(att/regs*100) + '%' : '--';
+    if (type === 'ev_name')            return esc(ev.title || ev.company || '--');
+    if (type === 'ev_dates')           return formatEventDate(ev).replace(' · ','') || '--';
+    if (type === 'ev_company')         return esc(ev.company || '--');
+    if (type === 'ev_registrations')   return regs.toLocaleString();
+    if (type === 'ev_attendees')       return att.toLocaleString();
+    if (type === 'ev_attendance_rate') return rate;
+    if (type === 'ev_clicks')          return (parseInt(ev.apply_clicks || ev.applyClicks) || 0).toLocaleString();
+    if (type === 'ev_note')            return esc(ev.note || '--');
+  }
+  return '--';
+}
+
+async function buildPresHTML(snapshot) {
   const latestBySlide = {};
-  entries.forEach(e => { const id = e.slideId || e.slide_id; if (!latestBySlide[id]) latestBySlide[id] = e; });
-  if (!slides.length) return `<div style="text-align:center;padding:3rem;color:#555">No slides yet.</div>`;
-  return slides.map((s, i) => {
+  entries.forEach(function(e) { const id = e.slideId || e.slide_id; if (!latestBySlide[id]) latestBySlide[id] = e; });
+  if (!slides.length) return '<div style="text-align:center;padding:3rem;color:#555">No slides yet.</div>';
+
+  // Load live data once for all slides
+  _liveCache = null;
+  const live = CONFIGURED ? await resolveLiveData() : null;
+
+  const periodLabel = live && live.hs ? live.hs.quarter : '';
+
+  return slides.map(function(s, i) {
+    var t = getSlideTheme(s);
     const e = latestBySlide[s.id];
-    return `<div class="pres-slide">
-      <div class="pres-slide-head">
-        <div class="pres-slide-num">Slide ${i + 1} of ${slides.length}</div>
-        <div class="pres-slide-title">${esc(s.title)}</div>
-      </div>
-      <div class="pres-slide-body">
-        ${e ? `
-          ${e.period ? `<div style="font-size:12px;color:#5a5a58;margin-bottom:1rem">Period: ${esc(e.period)}</div>` : ''}
-          ${s.fields.map(f => `
-            <div class="pres-pfield">
-              <div class="pres-pfield-label">${esc(f.label)}</div>
-              <div class="pres-pfield-value">${esc(e.data?.[f.id]) || '—'}</div>
-            </div>`).join('')}
-          <div class="pres-slide-meta">Updated ${fmtTs(e.ts || e.created_at)} · ${esc(e.by)}</div>
-        ` : `<div class="pres-pfield-empty">No data entered yet.</div>`}
-      </div>
-    </div>`;
+    const layout = s.layout || 'data';
+    const hasLiveFields = s.fields.some(function(f){return f.type.startsWith('hs_') || f.type.startsWith('ac_');});
+    const disclaimer = '<div style="margin-top:1.25rem;padding-top:.75rem;border-top:1px solid ' + t.border + ';font-size:10px;color:' + t.disclaimer + ';text-align:right;">Designed by Myra via Claude AI</div>';
+
+    // -- Title / Divider slide layout --------------------------
+    if (layout === 'title') {
+      // Find subtitle field if any
+      const subtitleField = s.fields.find(function(f){
+        return f.label.toLowerCase().includes('subtitle') || f.label.toLowerCase().includes('sub-title');
+      });
+      const subtitleVal = subtitleField && e && e.data ? (e.data[subtitleField.id] || '') : '';
+
+      // Image fields
+      const imageFields = s.fields.filter(function(f){ return f.type === 'image'; });
+
+      // Other text/detail fields (not subtitle, not image, not live)
+      const detailFields = s.fields.filter(function(f){
+        return f !== subtitleField && f.type !== 'image';
+      });
+
+      // Build image HTML (handles JSON array of multiple images)
+      var imageHTML = imageFields.map(function(f) {
+        const raw = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+        if (!raw) return '';
+        var urls = [];
+        try {
+          var parsed = JSON.parse(raw);
+          urls = Array.isArray(parsed) ? parsed.filter(Boolean) : (parsed ? [parsed] : []);
+        } catch(err) { urls = raw ? [raw] : []; }
+        if (!urls.length) return '';
+        return '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:1rem;">'
+          + urls.map(function(url) {
+              return '<img src="' + url + '" style="max-height:200px;max-width:' + (urls.length === 1 ? '80%' : 'calc(50% - 4px)') + ';border-radius:8px;object-fit:contain;flex:1;min-width:100px;display:block;margin:0 auto;" onerror="this.hidden=true">';
+            }).join('')
+          + '</div>';
+      }).join('');
+
+      return '<div class="pres-slide" style="min-height:300px;">'
+        + '<div style="background:var(--g);padding:3.5rem 2.5rem;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:300px;">'
+        + '<div style="font-size:10px;color:rgba(255,255,255,.55);letter-spacing:.1em;text-transform:uppercase;margin-bottom:1rem;">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
+        + imageHTML
+        + '<div style="font-size:28px;font-weight:700;color:#fff;line-height:1.3;margin-bottom:' + (subtitleVal ? '1rem' : '.5rem') + ';">' + esc(s.title) + '</div>'
+        + (subtitleVal ? '<div style="font-size:16px;color:rgba(255,255,255,.8);margin-bottom:.5rem;">' + esc(subtitleVal) + '</div>' : '')
+        + (detailFields.length && e ? '<div style="margin-top:1rem;">' + detailFields.map(function(f) {
+            const isLive = f.type.startsWith('hs_') || f.type.startsWith('ac_');
+            const val = isLive ? resolveLiveField(f.type, live, snapshot) : esc(e && e.data && e.data[f.id] ? e.data[f.id] : '');
+            return val ? '<div style="font-size:13px;color:rgba(255,255,255,.75);margin-top:6px;">' + esc(f.label) + ': ' + val + '</div>' : '';
+          }).join('') + '</div>' : '')
+        + '<div style="margin-top:2.5rem;font-size:10px;color:rgba(255,255,255,.3);">Designed by Myra via Claude AI</div>'
+        + '</div>'
+        + '</div>';
+    }
+
+    // -- Event slide layout ------------------------------------
+    if (layout === 'event') {
+      var ev = null;
+      // Find selected event from any ev_ field
+      if (e && e.data) {
+        for (var fi2 = 0; fi2 < s.fields.length; fi2++) {
+          var fld = s.fields[fi2];
+          if (fld.type.startsWith('ev_') && e.data['_event_pick_' + fld.id]) {
+            ev = getEventByName(e.data['_event_pick_' + fld.id]);
+            break;
+          }
+        }
+      }
+      if (!ev && clickEntries.length) ev = clickEntries.find(function(ce){ return (ce.entry_type||ce.type)==='event'; });
+
+      const regs  = ev ? (parseInt(ev.registrations) || 0) : 0;
+      const att   = ev ? (parseInt(ev.attendees)     || 0) : 0;
+      const rate  = regs > 0 ? Math.round(att/regs*100) + '%' : '--';
+      const clicks2 = ev ? (parseInt(ev.apply_clicks || ev.applyClicks) || 0) : 0;
+      const dateStr = ev ? formatEventDate(ev).replace(' · ','') : '--';
+
+      // Get image fields
+      var evImgHTML = '';
+      s.fields.filter(function(f){ return f.type === 'image'; }).forEach(function(f) {
+        var raw2 = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+        if (!raw2) return;
+        var urls2 = [];
+        try { var p2 = JSON.parse(raw2); urls2 = Array.isArray(p2) ? p2.filter(Boolean) : (p2 ? [p2] : []); } catch(err){ urls2 = raw2 ? [raw2] : []; }
+        evImgHTML += urls2.map(function(url){ return '<img src="' + url + '" style="max-height:180px;max-width:' + (urls2.length === 1 ? '100%' : '280px') + ';border-radius:8px;object-fit:contain;flex:1;min-width:120px;display:block;margin:0 auto;" onerror="this.hidden=true">'; }).join('');
+      });
+
+      return '<div class="pres-slide" style="background:' + t.slideBg + ';border-color:' + t.border + ';">'
+        + '<div style="background:' + t.headerBg + ';padding:1rem 1.5rem;">'
+        + '<div style="font-size:10px;color:' + t.meta + ';">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
+        + '<div style="font-size:18px;font-weight:600;color:' + t.headerText + ';">' + esc(s.title) + '</div>'
+        + (ev ? '<div style="font-size:12px;color:' + t.meta + ';margin-top:2px;">' + esc(ev.title || ev.company || '') + (dateStr !== '--' ? ' · ' + dateStr : '') + '</div>' : '')
+        + '</div>'
+        + '<div style="padding:1.25rem;">'
+        + (evImgHTML ? '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">' + evImgHTML + '</div>' : '')
+        + (ev ? '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1rem;">'
+          + '<div style="background:' + t.border + ';border-radius:8px;padding:.75rem;text-align:center;">'
+          + '<div style="font-size:11px;color:' + t.fieldLabel + ';">Registrations</div>'
+          + '<div style="font-size:22px;font-weight:700;color:' + t.fieldValue + ';">' + regs.toLocaleString() + '</div>'
+          + '</div>'
+          + '<div style="background:' + t.border + ';border-radius:8px;padding:.75rem;text-align:center;">'
+          + '<div style="font-size:11px;color:' + t.fieldLabel + ';">Attendees</div>'
+          + '<div style="font-size:22px;font-weight:700;color:' + t.fieldValue + ';">' + att.toLocaleString() + '</div>'
+          + '</div>'
+          + '<div style="background:' + t.border + ';border-radius:8px;padding:.75rem;text-align:center;">'
+          + '<div style="font-size:11px;color:' + t.fieldLabel + ';">Attendance rate</div>'
+          + '<div style="font-size:22px;font-weight:700;color:#1db954;">' + rate + '</div>'
+          + '</div>'
+          + (clicks2 ? '<div style="background:' + t.border + ';border-radius:8px;padding:.75rem;text-align:center;">'
+          + '<div style="font-size:11px;color:' + t.fieldLabel + ';">Apply clicks</div>'
+          + '<div style="font-size:22px;font-weight:700;color:' + t.fieldValue + ';">' + clicks2.toLocaleString() + '</div>'
+          + '</div>' : '')
+          + '</div>' : '<div style="font-size:13px;color:' + t.fieldLabel + ';font-style:italic;">No event selected. Go to Data entry and pick an event for this slide.</div>')
+        + s.fields.filter(function(f){ return !f.type.startsWith('ev_') && f.type !== 'image'; }).map(function(f) {
+            var raw3 = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+            var isLive3 = f.type.startsWith('hs_') || f.type.startsWith('ac_');
+            var val3 = isLive3 ? resolveLiveField(f.type, live, snapshot, null) : esc(raw3 || '--');
+            return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';">'
+              + '<div class="pres-pfield-label" style="color:' + t.fieldLabel + ';">' + esc(f.label) + '</div>'
+              + '<div class="pres-pfield-value" style="color:' + t.fieldValue + ';">' + val3 + '</div>'
+              + '</div>';
+          }).join('')
+        + (ev && ev.note ? '<div style="font-size:12px;color:' + t.fieldLabel + ';margin-top:.75rem;font-style:italic;">' + esc(ev.note) + '</div>' : '')
+        + '<div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid ' + t.border + ';font-size:10px;color:' + t.disclaimer + ';text-align:right;">Designed by Myra via Claude AI</div>'
+        + '</div>'
+        + '</div>';
+    }
+
+    // -- Data slide layout (default) ---------------------------
+    return '<div class="pres-slide" style="background:' + t.slideBg + ';border-color:' + t.border + ';">'
+      + '<div class="pres-slide-head" style="background:' + t.headerBg + ';">'
+      + '<div class="pres-slide-num" style="color:' + t.meta + '">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
+      + '<div class="pres-slide-title" style="color:' + t.headerText + '">' + esc(s.title) + '</div>'
+      + (periodLabel && hasLiveFields ? '<div style="font-size:11px;color:' + t.meta + ';margin-top:2px;">Period: ' + esc(periodLabel) + '</div>' : '')
+      + '</div>'
+      + '<div class="pres-slide-body">'
+      + (e && e.period ? '<div class="pres-slide-meta" style="margin-bottom:1rem;color:' + t.meta + '">Period: ' + esc(e.period) + '</div>' : '')
+      + s.fields.map(function(f) {
+          const isLive = f.type.startsWith('hs_') || f.type.startsWith('ac_');
+          const rawVal = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+
+          // Image field rendering (supports multiple images as JSON array)
+          if (f.type === 'image') {
+            var imgUrls = [];
+            try {
+              var parsed = JSON.parse(rawVal || '[]');
+              imgUrls = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
+            } catch(err) { imgUrls = rawVal ? [rawVal] : []; }
+            var imgGrid = imgUrls.length
+              ? '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;justify-content:center;">'
+                + imgUrls.map(function(url) {
+                    return url ? '<img src="' + url + '" style="max-height:260px;max-width:' + (imgUrls.length === 1 ? '100%' : 'calc(50% - 4px)') + ';border-radius:8px;object-fit:contain;flex:1;min-width:120px;display:block;margin:0 auto;" onerror="this.hidden=true">' : '';
+                  }).join('')
+                + '</div>'
+              : '<div class="pres-pfield-empty">No images uploaded yet.</div>';
+            return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';">'
+              + '<div class="pres-pfield-label" style="color:' + t.fieldLabel + ';">' + esc(f.label) + '</div>'
+              + imgGrid + '</div>';
+          }
+
+          // Build context for ev_ fields (event name picker)
+          var fieldCtx = null;
+          if (f.type.startsWith('ev_') && e && e.data) {
+            fieldCtx = { _evName: e.data['_event_pick_' + f.id] || '' };
+          }
+          const value = isLive
+            ? resolveLiveField(f.type, live, snapshot, fieldCtx)
+            : (f.type === 'text' ? escNL(rawVal || '--') : esc(rawVal || '--'));
+
+          return '<div class="pres-pfield">'
+            + '<div class="pres-pfield-label">' + esc(f.label) + (isLive ? ' <span style="font-size:9px;padding:1px 5px;border-radius:99px;background:rgba(29,185,84,.2);color:#1db954;font-weight:600;">LIVE</span>' : '') + '</div>'
+            + '<div class="pres-pfield-value" style="color:' + t.fieldValue + ';">' + value + '</div>'
+            + '</div>';
+        }).join('')
+      + (!e && !hasLiveFields ? '<div class="pres-pfield-empty">No data entered yet.</div>' : '')
+      + (e ? '<div class="pres-slide-meta" style="margin-top:12px;color:' + t.meta + ';">Updated ' + fmtTs(e.ts || e.created_at) + ' · ' + esc(e.by) + '</div>' : '')
+      + disclaimer
+      + '</div>'
+      + '</div>';
   }).join('');
 }
 
-function openPresentation() {
-  document.getElementById('presContent').innerHTML = buildPresHTML();
+async function openPresentation() {
+  document.getElementById('presContent').innerHTML = '<div style="text-align:center;padding:3rem;color:#aaa;">Loading live data...</div>';
   document.getElementById('presOverlay').classList.add('show');
+  try {
+    const html = await buildPresHTML(false);
+    document.getElementById('presContent').innerHTML = html;
+  } catch(err) {
+    console.error('Presentation error:', err);
+    document.getElementById('presContent').innerHTML = '<div style="text-align:center;padding:3rem;color:#e24b4a;">Error loading presentation: ' + err.message + '<br><br><small>Check browser console for details.</small></div>';
+  }
 }
 function closePresentation() {
   document.getElementById('presOverlay').classList.remove('show');
 }
 
-function exportHTML() {
+async function exportHTML() {
+  showToast('Preparing export...');
+  const slideHTML = await buildPresHTML(true); // true = snapshot mode
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1019,7 +2610,7 @@ body{font-family:'DM Sans',sans-serif;background:#f5f5f3;padding:2.5rem 1.5rem;c
 .cover-label{font-size:11px;color:rgba(255,255,255,.7);letter-spacing:.07em;text-transform:uppercase;margin-bottom:8px}
 .cover h1{font-size:28px;font-weight:700;color:#fff;margin-bottom:4px}
 .cover p{font-size:14px;color:rgba(255,255,255,.8)}
-.pres-slide{max-width:720px;margin:0 auto 1.5rem;background:#fff;border:1px solid #e5e5e3;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.pres-slide{max-width:100%;width:100%;margin:0 0 1.5rem;background:#fff;border:1px solid #e5e5e3;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06)}
 .pres-slide-head{background:#1db954;padding:1.25rem 1.5rem}
 .pres-slide-num{font-size:11px;color:rgba(255,255,255,.65);margin-bottom:3px}
 .pres-slide-title{font-size:20px;font-weight:600;color:#fff}
@@ -1039,7 +2630,7 @@ body{font-family:'DM Sans',sans-serif;background:#f5f5f3;padding:2.5rem 1.5rem;c
   <h1>OGSM Presentation</h1>
   <p>Exported ${new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'long', year:'numeric' })}</p>
 </div>
-${buildPresHTML()}
+${slideHTML}
 <div class="footer">Generated by Cake OGSM Platform · ${new Date().getFullYear()}</div>
 </body></html>`;
 
