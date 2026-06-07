@@ -329,19 +329,19 @@ input, select, textarea { font-family: var(--font); }
       <div class="pres-bar-title">OGSM &middot; Cake Indonesia</div>
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;" id="presPeriodBar">
         <span style="font-size:11px;color:#6a6a68;">HubSpot period:</span>
-        <select id="pres_mode" onchange="updatePresMode(this.value)" style="padding:4px 8px;font-size:11px;border:1px solid #3a3a38;border-radius:6px;background:#2a2a28;color:#c0c0bc;">
+        <select id="pres_mode" onchange="onPresModeChange(this.value)" style="padding:4px 8px;font-size:11px;border:1px solid #3a3a38;border-radius:6px;background:#2a2a28;color:#c0c0bc;">
           <option value="quarter">Quarter</option>
           <option value="semester">Semester</option>
           <option value="month">Month</option>
           <option value="all">All time</option>
         </select>
-        <select id="pres_period" onchange="hsPeriodVal=parseInt(this.value);refreshPresentation()" style="padding:4px 8px;font-size:11px;border:1px solid #3a3a38;border-radius:6px;background:#2a2a28;color:#c0c0bc;">
+        <select id="pres_period" onchange="onPresPeriodChange(this.value)" style="padding:4px 8px;font-size:11px;border:1px solid #3a3a38;border-radius:6px;background:#2a2a28;color:#c0c0bc;">
           <option value="1">Q1</option>
           <option value="2">Q2</option>
           <option value="3">Q3</option>
           <option value="4">Q4</option>
         </select>
-        <select id="pres_year" onchange="hsYear=parseInt(this.value);refreshPresentation()" style="padding:4px 8px;font-size:11px;border:1px solid #3a3a38;border-radius:6px;background:#2a2a28;color:#c0c0bc;">
+        <select id="pres_year" onchange="onPresYearChange(this.value)" style="padding:4px 8px;font-size:11px;border:1px solid #3a3a38;border-radius:6px;background:#2a2a28;color:#c0c0bc;">
           <option value="2026">2026</option>
           <option value="2025">2025</option>
           <option value="2024">2024</option>
@@ -2600,61 +2600,68 @@ async function buildPresHTML(snapshot) {
   }).join('');
 }
 
-function updatePresMode(mode) {
-  var modeChanged = (hsPeriodMode !== mode);
-  hsPeriodMode = mode;
-  if (modeChanged) hsPeriodVal = 1; // only reset when mode actually changes
-  // Update period dropdown options based on mode
-  const periodSel = document.getElementById('pres_period');
-  const yearSel   = document.getElementById('pres_year');
-  if (!periodSel) { refreshPresentation(); return; }
-  if (mode === 'all') {
-    periodSel.style.display = 'none';
-    yearSel.style.display   = 'none';
-  } else {
-    periodSel.style.display = '';
-    yearSel.style.display   = '';
-    periodSel.innerHTML = mode === 'quarter'
-      ? '<option value="1">Q1</option><option value="2">Q2</option><option value="3">Q3</option><option value="4">Q4</option>'
-      : mode === 'semester'
-      ? '<option value="1">H1</option><option value="2">H2</option>'
-      : ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-          .map(function(m,i){ return '<option value="' + (i+1) + '">' + m + '</option>'; }).join('');
-    periodSel.value = '1';
-  }
-  refreshPresentation();
-}
+// ─── Presentation period state (independent from dashboard) ───
+var presMode   = 'quarter';
+var presVal    = Math.floor(new Date().getMonth() / 3) + 1;
+var presYear   = new Date().getFullYear();
 
-function syncPresSelectors() {
+function buildPresSelectors() {
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var modeEl   = document.getElementById('pres_mode');
   var periodEl = document.getElementById('pres_period');
   var yearEl   = document.getElementById('pres_year');
-  if (modeEl)   modeEl.value   = hsPeriodMode;
-  if (yearEl)   yearEl.value   = String(hsYear);
-  // Rebuild period options first, then set value
-  if (periodEl && hsPeriodMode !== 'all') {
-    var curVal = hsPeriodVal;
-    periodEl.innerHTML = hsPeriodMode === 'quarter'
-      ? '<option value="1">Q1</option><option value="2">Q2</option><option value="3">Q3</option><option value="4">Q4</option>'
-      : hsPeriodMode === 'semester'
-      ? '<option value="1">H1</option><option value="2">H2</option>'
-      : ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-          .map(function(m,i){ return '<option value="' + (i+1) + '">' + m + '</option>'; }).join('');
-    periodEl.value = String(curVal);
+  if (!modeEl) return;
+
+  modeEl.value = presMode;
+  if (yearEl) yearEl.value = String(presYear);
+
+  if (periodEl) {
+    if (presMode === 'all') {
+      periodEl.style.display = 'none';
+      if (yearEl) yearEl.style.display = 'none';
+    } else {
+      periodEl.style.display = '';
+      if (yearEl) yearEl.style.display = '';
+      periodEl.innerHTML = presMode === 'quarter'
+        ? '<option value="1">Q1</option><option value="2">Q2</option><option value="3">Q3</option><option value="4">Q4</option>'
+        : presMode === 'semester'
+        ? '<option value="1">H1</option><option value="2">H2</option>'
+        : months.map(function(m,i){ return '<option value="' + (i+1) + '">' + m + '</option>'; }).join('');
+      periodEl.value = String(presVal);
+    }
   }
 }
 
-async function refreshPresentation() {
-  _liveCache = null;
+function onPresModeChange(val) {
+  presMode = val;
+  presVal  = 1;
+  buildPresSelectors();
+  loadAndRenderPres();
+}
+
+function onPresPeriodChange(val) {
+  presVal = parseInt(val);
+  loadAndRenderPres();
+}
+
+function onPresYearChange(val) {
+  presYear = parseInt(val);
+  loadAndRenderPres();
+}
+
+async function loadAndRenderPres() {
   var scroll = document.getElementById('presContent');
   var scrollPos = scroll ? scroll.scrollTop : 0;
   if (scroll) scroll.innerHTML = '<div style="text-align:center;padding:3rem;color:#aaa;">Loading...</div>';
   try {
+    // Temporarily swap global period vars so buildPresHTML uses pres values
+    var savedMode = hsPeriodMode, savedVal = hsPeriodVal, savedYear = hsYear;
+    hsPeriodMode = presMode; hsPeriodVal = presVal; hsYear = presYear;
+    _liveCache = null;
     const html = await buildPresHTML(false);
-    if (scroll) {
-      scroll.innerHTML = html;
-      scroll.scrollTop = scrollPos;
-    }
+    hsPeriodMode = savedMode; hsPeriodVal = savedVal; hsYear = savedYear;
+
+    if (scroll) { scroll.innerHTML = html; scroll.scrollTop = scrollPos; }
     setupPeriodBarVisibility();
   } catch(err) {
     console.error('Presentation error:', err);
@@ -2665,16 +2672,18 @@ async function refreshPresentation() {
 async function openPresentation() {
   document.getElementById('presContent').innerHTML = '<div style="text-align:center;padding:3rem;color:#aaa;">Loading live data...</div>';
   document.getElementById('presOverlay').classList.add('show');
-  syncPresSelectors();
-  updatePresMode(hsPeriodMode);
+  buildPresSelectors();
   try {
+    var savedMode = hsPeriodMode, savedVal = hsPeriodVal, savedYear = hsYear;
+    hsPeriodMode = presMode; hsPeriodVal = presVal; hsYear = presYear;
+    _liveCache = null;
     const html = await buildPresHTML(false);
+    hsPeriodMode = savedMode; hsPeriodVal = savedVal; hsYear = savedYear;
     document.getElementById('presContent').innerHTML = html;
-    // Show/hide period bar based on slide visibility
     setupPeriodBarVisibility();
   } catch(err) {
     console.error('Presentation error:', err);
-    document.getElementById('presContent').innerHTML = '<div style="text-align:center;padding:3rem;color:#e24b4a;">Error loading presentation: ' + err.message + '<br><br><small>Check browser console for details.</small></div>';
+    document.getElementById('presContent').innerHTML = '<div style="text-align:center;padding:3rem;color:#e24b4a;">Error: ' + err.message + '</div>';
   }
 }
 
@@ -2682,21 +2691,25 @@ function setupPeriodBarVisibility() {
   var scroll = document.getElementById('presContent');
   var bar    = document.getElementById('presPeriodBar');
   if (!scroll || !bar) return;
-  function checkVisibility() {
-    var slides = scroll.querySelectorAll('.pres-slide');
+  // Remove old listener by cloning
+  var newScroll = scroll.cloneNode(false);
+  scroll.parentNode.replaceChild(newScroll, scroll);
+  document.getElementById('presContent').innerHTML = scroll.innerHTML;
+  scroll = document.getElementById('presContent');
+
+  function check() {
+    var allSlides = scroll.querySelectorAll('.pres-slide');
+    if (!allSlides.length) return;
     var centerY = scroll.scrollTop + scroll.clientHeight / 2;
-    var currentSlide = null;
-    slides.forEach(function(sl) {
-      if (sl.offsetTop <= centerY && sl.offsetTop + sl.offsetHeight >= centerY) {
-        currentSlide = sl;
-      }
+    var current = null;
+    allSlides.forEach(function(sl) {
+      if (sl.offsetTop <= centerY && sl.offsetTop + sl.offsetHeight > centerY) current = sl;
     });
-    if (currentSlide) {
-      bar.style.display = currentSlide.getAttribute('data-has-hs') === '1' ? 'flex' : 'none';
-    }
+    if (!current) current = allSlides[0];
+    bar.style.display = current && current.getAttribute('data-has-hs') === '1' ? 'flex' : 'none';
   }
-  scroll.addEventListener('scroll', checkVisibility);
-  checkVisibility();
+  scroll.addEventListener('scroll', check);
+  setTimeout(check, 100);
 }
 function closePresentation() {
   document.getElementById('presOverlay').classList.remove('show');
