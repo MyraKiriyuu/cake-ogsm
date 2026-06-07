@@ -1658,6 +1658,20 @@ function renderSlideCard(s, idx) {
       <span style="color:var(--ink3); font-size:12px">&#8964;</span>
     </div>
     <div class="slide-card-body" id="sb_${s.id}">
+      <div id="ev_quick_block_${s.id}" style="display:${(s.layout||'data')==='event' ? 'block' : 'none'}">
+        <div style="background:var(--g-light);border:1px solid var(--g);border-radius:8px;padding:10px 12px;margin-bottom:10px;">
+          <div style="font-size:12px;font-weight:500;color:var(--gd);margin-bottom:8px;">Quick setup from event</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <select id="ev_quick_${s.id}" style="flex:1;min-width:160px;padding:6px 10px;font-size:12px;border:1px solid var(--border);border-radius:7px;background:var(--card);color:var(--ink);">
+              <option value="">-- Pick an event to auto-setup fields --</option>
+              ${getEventNames().map(n => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('')}
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();quickSetupEvent('${s.id}')">Setup fields</button>
+          </div>
+          <div style="font-size:11px;color:var(--ink3);margin-top:6px;">Picks an event and adds all available fields. You can delete the ones you don't need after.</div>
+          ${getEventNames().length === 0 ? '<div style="font-size:11px;color:#e24b4a;margin-top:4px;">No events logged yet. Add events in Apply clicks first.</div>' : ''}
+        </div>
+      </div>
       <div class="field-pill-list">
         ${s.fields.map(f => `
           <div class="field-pill">
@@ -1751,6 +1765,113 @@ async function saveEditTitle(id, newTitle, el) {
   await saveSlide(s);
   renderEntry();
   showToast('Title updated');
+}
+
+// All available event fields
+const EV_FIELDS = [
+  { label: 'Event name',       type: 'ev_name'            },
+  { label: 'Event date(s)',    type: 'ev_dates'            },
+  { label: 'Company',          type: 'ev_company'          },
+  { label: 'Registrations',    type: 'ev_registrations'    },
+  { label: 'Attendees',        type: 'ev_attendees'        },
+  { label: 'Attendance rate',  type: 'ev_attendance_rate'  },
+  { label: 'Apply clicks',     type: 'ev_clicks'           },
+  { label: 'Notes',            type: 'ev_note'             },
+];
+
+async function quickSetupEvent(slideId) {
+  const s = slides.find(function(sl){ return sl.id === slideId; });
+  if (!s) return;
+  const sel = document.getElementById('ev_quick_' + slideId);
+  const evName = sel ? sel.value : '';
+  if (!evName) { showToast('Please pick an event first'); return; }
+
+  // Show a field selection dialog
+  const ev = getEventByName(evName);
+  if (!ev) { showToast('Event not found'); return; }
+
+  // Build checklist of available fields
+  const available = EV_FIELDS.filter(function(f) {
+    if (f.type === 'ev_name')            return !!(ev.title || ev.company);
+    if (f.type === 'ev_dates')           return !!(ev.event_date || ev.eventDate);
+    if (f.type === 'ev_company')         return !!ev.company;
+    if (f.type === 'ev_registrations')   return !!(parseInt(ev.registrations));
+    if (f.type === 'ev_attendees')       return !!(parseInt(ev.attendees));
+    if (f.type === 'ev_attendance_rate') return !!(parseInt(ev.registrations) && parseInt(ev.attendees));
+    if (f.type === 'ev_clicks')          return !!(parseInt(ev.apply_clicks || ev.applyClicks));
+    if (f.type === 'ev_note')            return !!ev.note;
+    return true;
+  });
+
+  // Show modal
+  const existing = document.getElementById('ev_setup_modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'ev_setup_modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:flex;align-items:center;justify-content:center;padding:1rem;';
+  modal.innerHTML = '<div style="background:var(--card);border-radius:var(--radius-lg);padding:1.5rem;max-width:420px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.2);">'
+    + '<div style="font-size:16px;font-weight:600;color:var(--ink);margin-bottom:4px;">Setup event fields</div>'
+    + '<div style="font-size:12px;color:var(--ink3);margin-bottom:1rem;">Select which fields to add for <strong>' + esc(evName) + '</strong>. Uncheck any you do not need.</div>'
+    + '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:1.25rem;">'
+    + available.map(function(f) {
+        return '<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surface);border-radius:8px;cursor:pointer;">'
+          + '<input type="checkbox" value="' + f.type + '" checked style="width:16px;height:16px;accent-color:var(--g);">'
+          + '<span style="font-size:13px;color:var(--ink);">' + f.label + '</span>'
+          + '</label>';
+      }).join('')
+    + '</div>'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end;">'
+    + '<button onclick="document.getElementById(\'ev_setup_modal\').remove()" style="padding:8px 16px;font-size:13px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--ink);cursor:pointer;">Cancel</button>'
+    + '<button onclick="confirmQuickSetup(' + JSON.stringify(slideId) + ',' + JSON.stringify(evName) + ')" style="padding:8px 16px;font-size:13px;font-weight:500;border:none;border-radius:8px;background:var(--g);color:#fff;cursor:pointer;">Add fields</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(modal);
+}
+
+async function confirmQuickSetup(slideId, evName) {
+  const s = slides.find(function(sl){ return sl.id === slideId; });
+  if (!s) return;
+
+  const modal = document.getElementById('ev_setup_modal');
+  const checked = modal ? Array.from(modal.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){ return cb.value; }) : [];
+  if (modal) modal.remove();
+  if (!checked.length) { showToast('No fields selected'); return; }
+
+  // Remove existing ev_ fields to avoid duplicates
+  s.fields = s.fields.filter(function(f){ return !f.type.startsWith('ev_'); });
+
+  // Add selected fields
+  checked.forEach(function(type) {
+    const def = EV_FIELDS.find(function(f){ return f.type === type; });
+    if (def) s.fields.push({ id: uid(), label: def.label, type: def.type });
+  });
+
+  await saveSlide(s);
+
+  // Pre-save entry with event picker set to evName
+  // so user doesn't have to manually pick in data entry
+  const existingEntry = entries.find(function(en){ return (en.slideId || en.slide_id) === slideId; });
+  const entryData = existingEntry ? Object.assign({}, existingEntry.data || {}) : {};
+
+  // Set _event_pick_ for all ev_ fields
+  s.fields.filter(function(f){ return f.type.startsWith('ev_'); }).forEach(function(f) {
+    entryData['_event_pick_' + f.id] = evName;
+  });
+
+  const entry = {
+    id: uid(), slideId: slideId, slideTitle: s.title,
+    data: entryData, period: '', note: 'Auto-setup from event: ' + evName,
+    by: currentRole === 'admin' ? 'Admin' : 'Team', ts: tsNow()
+  };
+  entries.unshift(entry);
+  await saveEntry(entry);
+
+  renderAll();
+  // Re-open the slide panel
+  document.getElementById('sb_' + slideId)?.classList.add('open');
+  document.getElementById('sh_' + slideId)?.classList.add('open');
+  showToast('Fields added and event linked!');
 }
 
 async function moveField(slideId, fieldId, direction) {
