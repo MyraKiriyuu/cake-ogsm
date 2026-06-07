@@ -729,7 +729,8 @@ async function saveClickEntry(entry) {
           title:         entry.title,
           job_slug:      entry.jobSlug  || null,
           period:        entry.period,
-          event_date:    entry.eventDate || null,
+          event_date:      entry.eventDate    || null,
+          event_end_date:  entry.eventEndDate || null,
           registrations: entry.registrations ? parseInt(entry.registrations) : null,
           attendees:     entry.attendees     ? parseInt(entry.attendees)     : null,
           apply_clicks:  entry.applyClicks   ? parseInt(entry.applyClicks)   : null,
@@ -840,9 +841,10 @@ function renderClicks() {
           <div class="entry-field"><label>Event name *</label><input type="text" id="ev-title" placeholder="e.g. Young Talent Webinar - J&T Cargo"></div>
           <div class="entry-field"><label>Company *</label><input type="text" id="ev-company" placeholder="e.g. JT Cargo"></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-            <div class="entry-field"><label>Event date</label><input type="date" id="ev-date"></div>
-            <div class="entry-field"><label>Period</label><input type="text" id="ev-period" placeholder="e.g. Q2 2026"></div>
+            <div class="entry-field"><label>Start date</label><input type="date" id="ev-date"></div>
+            <div class="entry-field"><label>End date <span style="font-weight:400;color:var(--ink3)">(optional)</span></label><input type="date" id="ev-end-date"></div>
           </div>
+          <div class="entry-field"><label>Period</label><input type="text" id="ev-period" placeholder="e.g. Q2 2026"></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
             <div class="entry-field"><label>Registrations</label><input type="number" id="ev-regs" placeholder="0" min="0"></div>
             <div class="entry-field"><label>Attendees</label><input type="number" id="ev-att" placeholder="0" min="0"></div>
@@ -1144,6 +1146,7 @@ function submitClickEntry(type) {
       title,
       company,
       eventDate:     document.getElementById('ev-date')?.value    || null,
+      eventEndDate:  document.getElementById('ev-end-date')?.value || null,
       period:        document.getElementById('ev-period')?.value.trim() || '',
       registrations: document.getElementById('ev-regs')?.value    || null,
       attendees:     document.getElementById('ev-att')?.value     || null,
@@ -1153,7 +1156,7 @@ function submitClickEntry(type) {
       ts:            tsNow()
     };
     saveClickEntry(entry);
-    ['ev-title','ev-company','ev-date','ev-period','ev-regs','ev-att','ev-clicks','ev-note']
+    ['ev-title','ev-company','ev-date','ev-end-date','ev-period','ev-regs','ev-att','ev-clicks','ev-note']
       .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   } else {
     const title   = document.getElementById('job-title')?.value.trim();
@@ -1189,6 +1192,36 @@ function setClickFilter(f, el) {
 }
 
 // Dashboard
+// ─── Event date formatter ─────────────────────────────────────
+function formatEventDate(e) {
+  const start = e.event_date || e.eventDate;
+  const end   = e.event_end_date || e.eventEndDate;
+  if (!start) return '';
+  const fmt = function(d) {
+    return new Date(d).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  };
+  if (!end || end === start) return fmt(start) + ' · ';
+  return fmt(start) + ' - ' + fmt(end) + ' · ';
+}
+
+// ─── Event picker for slide fields ────────────────────────────
+function getEventNames() {
+  var events = clickEntries.filter(function(e){ return (e.entry_type||e.type) === 'event'; });
+  var seen = {};
+  return events.filter(function(e) {
+    var key = (e.title||e.company||'');
+    if (seen[key]) return false;
+    seen[key] = true;
+    return true;
+  }).map(function(e){ return e.title || e.company || ''; }).filter(Boolean);
+}
+
+function getEventByName(name) {
+  return clickEntries.find(function(e){
+    return (e.entry_type||e.type) === 'event' && (e.title||e.company||'') === name;
+  });
+}
+
 function fmtUSD(n) {
   if (!n && n !== 0) return '--';
   return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -1589,6 +1622,7 @@ function renderBuilder() {
       <select id="newSlideLayout" style="padding:9px 12px;font-size:13px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--ink);">
         <option value="data">Data slide</option>
         <option value="title">Title / Divider slide</option>
+        <option value="event">Event slide</option>
       </select>
       <button class="btn btn-primary" onclick="addSlide()">+ Add slide</button>
     </div>`;
@@ -1664,7 +1698,17 @@ function renderSlideCard(s, idx) {
           <optgroup label="Live: Apply clicks (auto-filled)">
             <option value="ac_total">Apply clicks: Total</option>
             <option value="ac_top_companies">Apply clicks: Top companies</option>
-            <option value="ac_events">Apply clicks: Event summary</option>
+            <option value="ac_events">Apply clicks: Event summary (all)</option>
+          </optgroup>
+          <optgroup label="Live: Specific event (auto-filled)">
+            <option value="ev_name">Event: Name</option>
+            <option value="ev_dates">Event: Date(s)</option>
+            <option value="ev_company">Event: Company</option>
+            <option value="ev_registrations">Event: Registrations</option>
+            <option value="ev_attendees">Event: Attendees</option>
+            <option value="ev_attendance_rate">Event: Attendance rate</option>
+            <option value="ev_clicks">Event: Apply clicks</option>
+            <option value="ev_note">Event: Notes</option>
           </optgroup>
         </select>
         <button class="btn btn-primary btn-sm" onclick="addField('${s.id}')">+ Add field</button>
@@ -1874,20 +1918,31 @@ function renderEntry() {
           <input type="text" id="ef_note"   placeholder="Note (optional)">
         </div>
         ${active.fields.map(f => {
-          const isLive = f.type.startsWith('hs_') || f.type.startsWith('ac_');
+          const isLive = f.type.startsWith('hs_') || f.type.startsWith('ac_') || f.type.startsWith('ev_');
           const liveLabel = {
-            hs_contracted: 'HubSpot: Contracted revenue',
-            hs_payments:   'HubSpot: Payments received',
-            hs_deals:      'HubSpot: Deal count',
-            hs_avg_deal:   'HubSpot: Avg deal size',
-            hs_qoq:        'HubSpot: QoQ growth',
-            hs_yoy:        'HubSpot: YoY growth',
-            hs_top_clients:'HubSpot: Top clients list',
-            ac_total:      'Apply clicks: Total',
+            hs_contracted:    'HubSpot: Contracted revenue',
+            hs_payments:      'HubSpot: Payments received',
+            hs_deals:         'HubSpot: Deal count',
+            hs_avg_deal:      'HubSpot: Avg deal size',
+            hs_qoq:           'HubSpot: QoQ growth',
+            hs_yoy:           'HubSpot: YoY growth',
+            hs_top_clients:   'HubSpot: Top clients list',
+            ac_total:         'Apply clicks: Total',
             ac_top_companies: 'Apply clicks: Top companies',
-            ac_events:     'Apply clicks: Event summary',
+            ac_events:        'Apply clicks: Event summary',
+            ev_name:          'Event: Name',
+            ev_dates:         'Event: Date(s)',
+            ev_company:       'Event: Company',
+            ev_registrations: 'Event: Registrations',
+            ev_attendees:     'Event: Attendees',
+            ev_attendance_rate: 'Event: Attendance rate',
+            ev_clicks:        'Event: Apply clicks',
+            ev_note:          'Event: Notes',
           }[f.type] || f.type;
           if (isLive) {
+            const isEvField = f.type.startsWith('ev_');
+            const eventNames = isEvField ? getEventNames() : [];
+            const savedEvent = isEvField && latest?.data ? (latest.data['_event_pick_' + f.id] || '') : '';
             return `<div class="entry-field">
               <label>${esc(f.label)} <span>(${f.type})</span></label>
               <div style="padding:8px 12px;background:var(--g-light);border:1px solid var(--g);border-radius:8px;font-size:12px;color:var(--gd);display:flex;align-items:center;gap:8px;">
@@ -1895,6 +1950,14 @@ function renderEntry() {
                 <div><strong>Live field</strong> -- ${liveLabel}<br>
                 <span style="font-size:11px;opacity:.8;">This field is auto-filled from live data. No manual input needed.</span></div>
               </div>
+              ${isEvField ? `<div style="margin-top:6px;">
+                <label style="font-size:11px;color:var(--ink2);display:block;margin-bottom:3px;">Which event? (pick one)</label>
+                <select id="ev_pick_${f.id}" style="width:100%;padding:7px 10px;font-size:12px;border:1px solid var(--border);border-radius:7px;background:var(--card);color:var(--ink);">
+                  <option value="">-- Select event --</option>
+                  ${eventNames.map(n => '<option value="' + esc(n) + '"' + (n === savedEvent ? ' selected' : '') + '>' + esc(n) + '</option>').join('')}
+                </select>
+                ${eventNames.length === 0 ? '<div style="font-size:11px;color:#e24b4a;margin-top:4px;">No events logged yet. Add events in the Apply clicks tab first.</div>' : ''}
+              </div>` : ''}
             </div>`;
           }
           return `<div class="entry-field">
@@ -2016,6 +2079,11 @@ async function submitEntry() {
   active.fields.forEach(f => {
     const inp = document.getElementById('ef_' + f.id);
     if (inp) data[f.id] = inp.value.trim();
+    // Save event picker selection for ev_ fields
+    if (f.type.startsWith('ev_')) {
+      const pick = document.getElementById('ev_pick_' + f.id);
+      if (pick) data['_event_pick_' + f.id] = pick.value;
+    }
   });
   const entry = {
     id: uid(), slideId: active.id, slideTitle: active.title,
@@ -2119,7 +2187,7 @@ async function resolveLiveData() {
   return _liveCache;
 }
 
-function resolveLiveField(type, live, snapshot) {
+function resolveLiveField(type, live, snapshot, ctx) {
   const hs = live ? live.hs : null;
   if (!hs && type.startsWith('hs_')) return snapshot ? '[No HubSpot data]' : '<span style="color:#aaa;font-style:italic;">No HubSpot data for this period</span>';
 
@@ -2165,10 +2233,29 @@ function resolveLiveField(type, live, snapshot) {
         + '<div style="font-size:13px;font-weight:500;">' + esc(e.title || e.company) + '</div>'
         + '<div style="font-size:11px;color:rgba(255,255,255,.65);margin-top:2px;">'
         + (e.period ? e.period + ' · ' : '')
-        + regs.toLocaleString() + ' registrations · '
-        + att.toLocaleString() + ' attended (' + rate + ')'
+        + formatEventDate(e)
+        + (regs ? regs.toLocaleString() + ' registrations · ' : '')
+        + (att  ? att.toLocaleString() + ' attended (' + rate + ')' : '')
         + '</div></div>';
     }).join('');
+  }
+
+  // ─── Specific event fields ────────────────────────────────
+  if (type.startsWith('ev_')) {
+    var evName = ctx && ctx._evName ? ctx._evName : '';
+    var ev = evName ? getEventByName(evName) : (live && live.events && live.events[0]);
+    if (!ev) return snapshot ? 'No event selected' : '<span style="color:rgba(255,255,255,.4);font-style:italic;">No event selected. Pick one in Data entry.</span>';
+    const regs = parseInt(ev.registrations) || 0;
+    const att  = parseInt(ev.attendees)     || 0;
+    const rate = regs > 0 ? Math.round(att/regs*100) + '%' : '--';
+    if (type === 'ev_name')            return esc(ev.title || ev.company || '--');
+    if (type === 'ev_dates')           return formatEventDate(ev).replace(' · ','') || '--';
+    if (type === 'ev_company')         return esc(ev.company || '--');
+    if (type === 'ev_registrations')   return regs.toLocaleString();
+    if (type === 'ev_attendees')       return att.toLocaleString();
+    if (type === 'ev_attendance_rate') return rate;
+    if (type === 'ev_clicks')          return (parseInt(ev.apply_clicks || ev.applyClicks) || 0).toLocaleString();
+    if (type === 'ev_note')            return esc(ev.note || '--');
   }
   return '--';
 }
@@ -2240,6 +2327,78 @@ async function buildPresHTML(snapshot) {
         + '</div>';
     }
 
+    // -- Event slide layout ------------------------------------
+    if (layout === 'event') {
+      var ev = null;
+      // Find selected event from any ev_ field
+      if (e && e.data) {
+        for (var fi2 = 0; fi2 < s.fields.length; fi2++) {
+          var fld = s.fields[fi2];
+          if (fld.type.startsWith('ev_') && e.data['_event_pick_' + fld.id]) {
+            ev = getEventByName(e.data['_event_pick_' + fld.id]);
+            break;
+          }
+        }
+      }
+      if (!ev && clickEntries.length) ev = clickEntries.find(function(ce){ return (ce.entry_type||ce.type)==='event'; });
+
+      const regs  = ev ? (parseInt(ev.registrations) || 0) : 0;
+      const att   = ev ? (parseInt(ev.attendees)     || 0) : 0;
+      const rate  = regs > 0 ? Math.round(att/regs*100) + '%' : '--';
+      const clicks2 = ev ? (parseInt(ev.apply_clicks || ev.applyClicks) || 0) : 0;
+      const dateStr = ev ? formatEventDate(ev).replace(' · ','') : '--';
+
+      // Get image fields
+      var evImgHTML = '';
+      s.fields.filter(function(f){ return f.type === 'image'; }).forEach(function(f) {
+        var raw2 = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+        if (!raw2) return;
+        var urls2 = [];
+        try { var p2 = JSON.parse(raw2); urls2 = Array.isArray(p2) ? p2.filter(Boolean) : (p2 ? [p2] : []); } catch(err){ urls2 = raw2 ? [raw2] : []; }
+        evImgHTML += urls2.map(function(url){ return '<img src="' + url + '" style="height:140px;border-radius:8px;object-fit:cover;flex:1;min-width:120px;max-width:280px;" onerror="this.hidden=true">'; }).join('');
+      });
+
+      return '<div class="pres-slide" style="background:' + t.slideBg + ';border-color:' + t.border + ';">'
+        + '<div style="background:' + t.headerBg + ';padding:1rem 1.5rem;">'
+        + '<div style="font-size:10px;color:' + t.meta + ';">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
+        + '<div style="font-size:18px;font-weight:600;color:' + t.headerText + ';">' + esc(s.title) + '</div>'
+        + (ev ? '<div style="font-size:12px;color:' + t.meta + ';margin-top:2px;">' + esc(ev.title || ev.company || '') + (dateStr !== '--' ? ' · ' + dateStr : '') + '</div>' : '')
+        + '</div>'
+        + '<div style="padding:1.25rem;">'
+        + (evImgHTML ? '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">' + evImgHTML + '</div>' : '')
+        + (ev ? '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1rem;">'
+          + '<div style="background:' + t.border + ';border-radius:8px;padding:.75rem;text-align:center;">'
+          + '<div style="font-size:11px;color:' + t.fieldLabel + ';">Registrations</div>'
+          + '<div style="font-size:22px;font-weight:700;color:' + t.fieldValue + ';">' + regs.toLocaleString() + '</div>'
+          + '</div>'
+          + '<div style="background:' + t.border + ';border-radius:8px;padding:.75rem;text-align:center;">'
+          + '<div style="font-size:11px;color:' + t.fieldLabel + ';">Attendees</div>'
+          + '<div style="font-size:22px;font-weight:700;color:' + t.fieldValue + ';">' + att.toLocaleString() + '</div>'
+          + '</div>'
+          + '<div style="background:' + t.border + ';border-radius:8px;padding:.75rem;text-align:center;">'
+          + '<div style="font-size:11px;color:' + t.fieldLabel + ';">Attendance rate</div>'
+          + '<div style="font-size:22px;font-weight:700;color:#1db954;">' + rate + '</div>'
+          + '</div>'
+          + (clicks2 ? '<div style="background:' + t.border + ';border-radius:8px;padding:.75rem;text-align:center;">'
+          + '<div style="font-size:11px;color:' + t.fieldLabel + ';">Apply clicks</div>'
+          + '<div style="font-size:22px;font-weight:700;color:' + t.fieldValue + ';">' + clicks2.toLocaleString() + '</div>'
+          + '</div>' : '')
+          + '</div>' : '<div style="font-size:13px;color:' + t.fieldLabel + ';font-style:italic;">No event selected. Go to Data entry and pick an event for this slide.</div>')
+        + s.fields.filter(function(f){ return !f.type.startsWith('ev_') && f.type !== 'image'; }).map(function(f) {
+            var raw3 = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+            var isLive3 = f.type.startsWith('hs_') || f.type.startsWith('ac_');
+            var val3 = isLive3 ? resolveLiveField(f.type, live, snapshot, null) : esc(raw3 || '--');
+            return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';">'
+              + '<div class="pres-pfield-label" style="color:' + t.fieldLabel + ';">' + esc(f.label) + '</div>'
+              + '<div class="pres-pfield-value" style="color:' + t.fieldValue + ';">' + val3 + '</div>'
+              + '</div>';
+          }).join('')
+        + (ev && ev.note ? '<div style="font-size:12px;color:' + t.fieldLabel + ';margin-top:.75rem;font-style:italic;">' + esc(ev.note) + '</div>' : '')
+        + '<div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid ' + t.border + ';font-size:10px;color:' + t.disclaimer + ';text-align:right;">Designed by Myra via Claude AI</div>'
+        + '</div>'
+        + '</div>';
+    }
+
     // -- Data slide layout (default) ---------------------------
     return '<div class="pres-slide" style="background:' + t.slideBg + ';border-color:' + t.border + ';">'
       + '<div class="pres-slide-head" style="background:' + t.headerBg + ';">'
@@ -2272,8 +2431,13 @@ async function buildPresHTML(snapshot) {
               + imgGrid + '</div>';
           }
 
+          // Build context for ev_ fields (event name picker)
+          var fieldCtx = null;
+          if (f.type.startsWith('ev_') && e && e.data) {
+            fieldCtx = { _evName: e.data['_event_pick_' + f.id] || '' };
+          }
           const value = isLive
-            ? resolveLiveField(f.type, live, snapshot)
+            ? resolveLiveField(f.type, live, snapshot, fieldCtx)
             : esc(rawVal || '--');
 
           return '<div class="pres-pfield">'
