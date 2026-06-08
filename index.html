@@ -2587,7 +2587,7 @@ async function buildPresHTML(snapshot) {
             ? resolveLiveField(f.type, live, snapshot, fieldCtx)
             : (f.type === 'text' ? escNL(rawVal || '--') : esc(rawVal || '--'));
 
-
+          return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';">' 
             + '<div class="pres-pfield-label">' + esc(f.label) + (isLive ? ' <span style="font-size:9px;padding:1px 5px;border-radius:99px;background:rgba(29,185,84,.2);color:#1db954;font-weight:600;">LIVE</span>' : '') + '</div>'
             + '<div class="pres-pfield-value" style="color:' + t.fieldValue + ';">' + value + '</div>'
             + '</div>';
