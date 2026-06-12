@@ -704,19 +704,19 @@ function buildPages() {
 // --- Slide layout templates ---------------------------
 const SLIDE_TEMPLATES = {
   // Data slide templates
-  'full':        { label: 'Full width',    zones: ['main'],        desc: 'Single column', for: ['data'] },
-  'two-col':     { label: 'Two columns',   zones: ['left','right'], desc: 'Equal left/right', for: ['data'] },
-  'split':       { label: 'Split',         zones: ['left','right'], desc: 'Wider left, narrower right', for: ['data'] },
-  'big-num':     { label: 'Big number',    zones: ['hero','rest'],  desc: 'Hero metric + grid below', for: ['data'] },
-  'header-grid': { label: 'Header + grid', zones: ['header','grid'],desc: 'Header + metric grid', for: ['data'] },
+  'full':        { label: 'Full width',    zones: ['main'],        desc: 'Single column', layouts: ['data'] },
+  'two-col':     { label: 'Two columns',   zones: ['left','right'], desc: 'Equal left/right', layouts: ['data'] },
+  'split':       { label: 'Split',         zones: ['left','right'], desc: 'Wider left, narrower right', layouts: ['data'] },
+  'big-num':     { label: 'Big number',    zones: ['hero','rest'],  desc: 'Hero metric + grid below', layouts: ['data'] },
+  'header-grid': { label: 'Header + grid', zones: ['header','grid'],desc: 'Header + metric grid', layouts: ['data'] },
   // Title slide templates
-  'title-centered':   { label: 'Centered',       zones: [],          desc: 'Title and subtitle centered', for: ['title'] },
-  'title-img-right':  { label: 'Title + image',  zones: [],          desc: 'Title left, image right', for: ['title'] },
-  'title-img-bleed':  { label: 'Full bleed',     zones: [],          desc: 'Image fills slide, title overlaid', for: ['title'] },
+  'title-centered':   { label: 'Centered',       zones: [],          desc: 'Title and subtitle centered', layouts: ['title'] },
+  'title-img-right':  { label: 'Title + image',  zones: [],          desc: 'Title left, image right', layouts: ['title'] },
+  'title-img-bleed':  { label: 'Full bleed',     zones: [],          desc: 'Image fills slide, title overlaid', layouts: ['title'] },
   // Event slide templates
-  'event-stats-img':  { label: 'Stats + image',  zones: [],          desc: 'Stats left, photo right', for: ['event'] },
-  'event-full-stats': { label: 'Full stats',      zones: [],          desc: 'All stats, no image', for: ['event'] },
-  'event-timeline':   { label: 'Timeline',        zones: [],          desc: 'Dates large at top, stats below', for: ['event'] },
+  'event-stats-img':  { label: 'Stats + image',  zones: [],          desc: 'Stats left, photo right', layouts: ['event'] },
+  'event-full-stats': { label: 'Full stats',      zones: [],          desc: 'All stats, no image', layouts: ['event'] },
+  'event-timeline':   { label: 'Timeline',        zones: [],          desc: 'Dates large at top, stats below', layouts: ['event'] },
 };
 
 function getFieldZone(f, tpl) {
@@ -1744,7 +1744,11 @@ function renderSlideCard(s, idx) {
         <option value="event" ${(s.layout||'data')==='event' ? 'selected' : ''}>Event</option>
       </select>
       <select onchange="event.stopPropagation(); setSlideTemplate('${s.id}', this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);" title="Slide template">
-        ${Object.entries(SLIDE_TEMPLATES).filter(function(e2){ return !e2[1].for || e2[1].for.includes(s.layout||'data'); }).map(function(e2){ return '<option value="' + e2[0] + '"' + ((s.template||Object.keys(SLIDE_TEMPLATES).find(function(k){ return SLIDE_TEMPLATES[k].for && SLIDE_TEMPLATES[k].for.includes(s.layout||'data'); }))=== e2[0] ? ' selected' : '') + '>' + e2[1].label + '</option>'; }).join('')}
+        ${Object.entries(SLIDE_TEMPLATES).filter(function(e2){ return !e2[1].layouts || e2[1].layouts.includes(s.layout||'data'); }).map(function(e2){
+            var defTpl = s.layout==='title' ? 'title-centered' : s.layout==='event' ? 'event-stats-img' : 'full';
+            var isSelected = (s.template || defTpl) === e2[0];
+            return '<option value="' + e2[0] + '"' + (isSelected ? ' selected' : '') + '>' + e2[1].label + '</option>';
+          }).join('')}
       </select>
       <select onchange="event.stopPropagation(); setSlideTheme('${s.id}', this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);" title="Slide theme">
         <option value="global" ${!s.theme ? 'selected' : ''}>Theme: Global</option>
@@ -2722,14 +2726,15 @@ async function buildPresHTML(snapshot) {
           + '</div>';
       }
 
-      var fCountD = s.fields.length || 1;
-      var dVal = dynFontSize(fCountD, 15, 11, 22);
-      var dLbl = dynFontSize(fCountD, 10, 9,  13);
       return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';padding:' + (fCountD > 6 ? '.3rem' : '.5rem') + ' 0;">'
         + '<div class="pres-pfield-label" style="color:' + t.fieldLabel + ';font-size:' + dLbl + ';">' + esc(f3.label) + liveBadge + '</div>'
         + '<div class="pres-pfield-value" style="color:' + t.fieldValue + ';font-size:' + dVal + ';">' + val3 + '</div>'
         + '</div>';
     }
+
+    var fCountD = s.fields.length || 1;
+    var dVal    = dynFontSize(fCountD, 15, 11, 22);
+    var dLbl    = dynFontSize(fCountD, 10, 9,  13);
 
     var bodyHTML = '';
     if (tpl === 'full') {
