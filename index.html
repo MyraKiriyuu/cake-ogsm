@@ -703,11 +703,20 @@ function buildPages() {
 
 // --- Slide layout templates ---------------------------
 const SLIDE_TEMPLATES = {
-  'full':        { label: 'Full width',    zones: ['main'],        desc: 'Single column' },
-  'two-col':     { label: 'Two columns',   zones: ['left','right'], desc: 'Equal left/right columns' },
-  'split':       { label: 'Split',         zones: ['left','right'], desc: 'Wider left, narrower right' },
-  'big-num':     { label: 'Big number',    zones: ['hero','rest'],  desc: 'Hero metric + fields below' },
-  'header-grid': { label: 'Header + grid', zones: ['header','grid'],desc: 'Header row + metric grid' },
+  // Data slide templates
+  'full':        { label: 'Full width',    zones: ['main'],        desc: 'Single column', for: ['data'] },
+  'two-col':     { label: 'Two columns',   zones: ['left','right'], desc: 'Equal left/right', for: ['data'] },
+  'split':       { label: 'Split',         zones: ['left','right'], desc: 'Wider left, narrower right', for: ['data'] },
+  'big-num':     { label: 'Big number',    zones: ['hero','rest'],  desc: 'Hero metric + grid below', for: ['data'] },
+  'header-grid': { label: 'Header + grid', zones: ['header','grid'],desc: 'Header + metric grid', for: ['data'] },
+  // Title slide templates
+  'title-centered':   { label: 'Centered',       zones: [],          desc: 'Title and subtitle centered', for: ['title'] },
+  'title-img-right':  { label: 'Title + image',  zones: [],          desc: 'Title left, image right', for: ['title'] },
+  'title-img-bleed':  { label: 'Full bleed',     zones: [],          desc: 'Image fills slide, title overlaid', for: ['title'] },
+  // Event slide templates
+  'event-stats-img':  { label: 'Stats + image',  zones: [],          desc: 'Stats left, photo right', for: ['event'] },
+  'event-full-stats': { label: 'Full stats',      zones: [],          desc: 'All stats, no image', for: ['event'] },
+  'event-timeline':   { label: 'Timeline',        zones: [],          desc: 'Dates large at top, stats below', for: ['event'] },
 };
 
 function getFieldZone(f, tpl) {
@@ -723,6 +732,14 @@ const THEMES = {
   dark:  { slideBg:'#1a1a18', slideText:'#f0f0ee', headerBg:'#111110', headerText:'#f0f0ee', fieldLabel:'#6a6a68', fieldValue:'#f0f0ee', border:'#2a2a28', meta:'#4a4a48', disclaimer:'rgba(255,255,255,.2)' },
   cake:  { slideBg:'#1db954', slideText:'#ffffff',  headerBg:'#0f6e34', headerText:'#ffffff', fieldLabel:'rgba(255,255,255,.65)', fieldValue:'#ffffff', border:'rgba(255,255,255,.2)', meta:'rgba(255,255,255,.4)', disclaimer:'rgba(255,255,255,.3)' },
 };
+
+// ─── Dynamic font size based on field count ───────────────────
+function dynFontSize(fieldCount, base, min, max) {
+  // More fields = smaller font, fewer fields = larger font
+  var scale = Math.max(0.6, Math.min(1.4, 1.4 - (fieldCount - 1) * 0.08));
+  var size = Math.round(base * scale);
+  return Math.max(min, Math.min(max, size)) + 'px';
+}
 
 function getSlideTheme(s) {
   var key = s.theme || globalTheme || 'light';
@@ -1668,6 +1685,33 @@ function renderBuilder() {
         <button onclick="setGlobalTheme('cake')"  style="padding:6px 14px;font-size:12px;font-weight:500;border-radius:7px;border:1px solid var(--border);cursor:pointer;background:${globalTheme==='cake'  ? '#1db954' : 'var(--card)'};color:${globalTheme==='cake'  ? '#fff' : 'var(--ink)'};">Cake Green</button>
       </div>
     </div>
+    <div style="margin-bottom:1.25rem;">
+      <button onclick="toggleBuilderGuide()" style="width:100%;text-align:left;padding:.75rem 1rem;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:13px;font-weight:500;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
+        <span>&#9432; How to use the slide builder</span>
+        <span id="builderGuideArrow" style="font-size:11px;color:var(--ink3);">Show</span>
+      </button>
+      <div id="builderGuide" style="display:none;padding:1rem 1.25rem;background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 10px 10px;font-size:12px;color:var(--ink2);line-height:1.75;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+          <div>
+            <div style="font-weight:600;color:var(--ink);margin-bottom:.4rem;">Creating slides</div>
+            Type a slide title, pick a layout and click Add slide. Three layouts available: <b>Data</b> (fields and metrics), <b>Title</b> (section dividers, no data), <b>Event</b> (auto-pulls from Apply clicks log).
+            <div style="font-weight:600;color:var(--ink);margin:.75rem 0 .4rem;">Slide settings</div>
+            Each slide card has four dropdowns: <b>Layout</b> (Data/Title/Event), <b>Template</b> (visual arrangement), <b>Theme</b> (Light/Dark/Cake Green or Global), and the up/down arrows to reorder. Click the slide title to rename it inline.
+            <div style="font-weight:600;color:var(--ink);margin:.75rem 0 .4rem;">Adding fields</div>
+            Open a slide, type a field label, pick a type, and click Add field. Field types: Number, Text, Percent, Currency, Date, URL, Image (upload). Live types pull from HubSpot or Apply clicks automatically — no manual entry needed.
+          </div>
+          <div>
+            <div style="font-weight:600;color:var(--ink);margin-bottom:.4rem;">Field zones (templates)</div>
+            When a multi-zone template is selected (Two columns, Split, Big number, Header + grid), each field pill shows a zone dropdown. Change it to move the field between zones — e.g. from Left to Right column. Fields without a zone go to the first zone by default.
+            <div style="font-weight:600;color:var(--ink);margin:.75rem 0 .4rem;">Event slides</div>
+            Set layout to Event, then go to Data entry, select the slide, and use the Quick setup button to link it to a logged event. The slide will auto-fill registrations, attendees, attendance rate, and clicks from the Apply clicks log.
+            <div style="font-weight:600;color:var(--ink);margin:.75rem 0 .4rem;">Live HubSpot fields</div>
+            Fields like HubSpot: Contracted revenue and HubSpot: QoQ growth pull live data. In the presentation, use the period selector in the top bar to switch between Quarter, Semester, or Month — data updates instantly without rebuilding slides.
+          </div>
+        </div>
+        <div style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border);font-size:11px;color:var(--ink3);">Tip: Global theme at the bottom of this panel sets the default for all slides. Per-slide theme overrides it. Font size in the presentation scales automatically based on how many fields a slide has.</div>
+      </div>
+    </div>
     <div class="section-title">Add new slide</div>
     <div class="add-slide-row">
       <input type="text" id="newSlideTitle" placeholder="e.g. 'Revenue Summary Q2 2026'">
@@ -1700,11 +1744,7 @@ function renderSlideCard(s, idx) {
         <option value="event" ${(s.layout||'data')==='event' ? 'selected' : ''}>Event</option>
       </select>
       <select onchange="event.stopPropagation(); setSlideTemplate('${s.id}', this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);" title="Slide template">
-        <option value="full"        ${(s.template||'full')==='full'        ? 'selected':''}>Full width</option>
-        <option value="two-col"     ${(s.template||'full')==='two-col'     ? 'selected':''}>Two columns</option>
-        <option value="split"       ${(s.template||'full')==='split'       ? 'selected':''}>Split</option>
-        <option value="big-num"     ${(s.template||'full')==='big-num'     ? 'selected':''}>Big number</option>
-        <option value="header-grid" ${(s.template||'full')==='header-grid' ? 'selected':''}>Header + grid</option>
+        ${Object.entries(SLIDE_TEMPLATES).filter(function(e2){ return !e2[1].for || e2[1].for.includes(s.layout||'data'); }).map(function(e2){ return '<option value="' + e2[0] + '"' + ((s.template||Object.keys(SLIDE_TEMPLATES).find(function(k){ return SLIDE_TEMPLATES[k].for && SLIDE_TEMPLATES[k].for.includes(s.layout||'data'); }))=== e2[0] ? ' selected' : '') + '>' + e2[1].label + '</option>'; }).join('')}
       </select>
       <select onchange="event.stopPropagation(); setSlideTheme('${s.id}', this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);" title="Slide theme">
         <option value="global" ${!s.theme ? 'selected' : ''}>Theme: Global</option>
@@ -1991,6 +2031,14 @@ async function saveFieldLabel(slideId, fieldId, newLabel, el) {
   await saveSlide(s);
   renderEntry();
   showToast('Field label updated');
+}
+
+function toggleBuilderGuide() {
+  var guide  = document.getElementById('builderGuide');
+  var arrow  = document.getElementById('builderGuideArrow');
+  var open   = guide && guide.style.display !== 'none';
+  if (guide) guide.style.display = open ? 'none' : 'block';
+  if (arrow) arrow.textContent   = open ? 'Show' : 'Hide';
 }
 
 async function setSlideTemplate(id, tpl) {
@@ -2495,123 +2543,145 @@ async function buildPresHTML(snapshot) {
 
     // -- Title / Divider slide layout --------------------------
     if (layout === 'title') {
-      // Find subtitle field if any
-      const subtitleField = s.fields.find(function(f){
-        return f.label.toLowerCase().includes('subtitle') || f.label.toLowerCase().includes('sub-title');
+      var titleTpl = s.template || 'title-centered';
+      var subField = s.fields.find(function(f){ return f.label.toLowerCase().includes('subtitle'); });
+      var subVal   = subField && e && e.data ? (e.data[subField.id] || '') : '';
+      var imgFields2 = s.fields.filter(function(f){ return f.type === 'image'; });
+      var imgHTML2 = '';
+      imgFields2.forEach(function(f) {
+        var raw4 = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+        if (!raw4) return;
+        var urls4 = [];
+        try { var p4 = JSON.parse(raw4); urls4 = Array.isArray(p4)?p4.filter(Boolean):(p4?[p4]:[]); } catch(ex){ urls4=raw4?[raw4]:[]; }
+        imgHTML2 += urls4.map(function(u){ return '<img src="'+u+'" style="max-width:100%;max-height:100%;object-fit:cover;border-radius:8px;" onerror="this.hidden=true">'; }).join('');
       });
-      const subtitleVal = subtitleField && e && e.data ? (e.data[subtitleField.id] || '') : '';
+      var hasImg = imgHTML2.length > 0;
 
-      // Image fields
-      const imageFields = s.fields.filter(function(f){ return f.type === 'image'; });
+      // Dynamic font sizes based on content
+      var fCount = s.fields.length || 1;
+      var dynVal  = dynFontSize(fCount, 16, 12, 22);
+      var dynLbl  = dynFontSize(fCount, 10, 9,  13);
 
-      // Other text/detail fields (not subtitle, not image, not live)
-      const detailFields = s.fields.filter(function(f){
-        return f !== subtitleField && f.type !== 'image';
-      });
-
-      // Build image HTML (handles JSON array of multiple images)
-      var imageHTML = imageFields.map(function(f) {
-        const raw = e && e.data && e.data[f.id] ? e.data[f.id] : '';
-        if (!raw) return '';
-        var urls = [];
-        try {
-          var parsed = JSON.parse(raw);
-          urls = Array.isArray(parsed) ? parsed.filter(Boolean) : (parsed ? [parsed] : []);
-        } catch(err) { urls = raw ? [raw] : []; }
-        if (!urls.length) return '';
-        return '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:1rem;">'
-          + urls.map(function(url) {
-              return '<img src="' + url + '" style="max-height:200px;max-width:' + (urls.length === 1 ? '80%' : 'calc(50% - 4px)') + ';border-radius:8px;object-fit:contain;flex:1;min-width:100px;display:block;margin:0 auto;" onerror="this.hidden=true">';
-            }).join('')
+      var titleContent = '';
+      if (titleTpl === 'title-img-right' && hasImg) {
+        titleContent = '<div style="display:grid;grid-template-columns:1fr 1fr;height:100%;gap:0;">'
+          + '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2.5rem 2rem;background:' + t.slideBg + ';">'
+          + '<div style="font-size:32px;font-weight:700;color:' + t.slideText + ';line-height:1.2;margin-bottom:.75rem;">' + esc(s.title) + '</div>'
+          + (subVal ? '<div style="font-size:16px;color:' + t.fieldLabel + ';margin-bottom:.5rem;">' + esc(subVal) + '</div>' : '')
+          + '</div>'
+          + '<div style="overflow:hidden;border-radius:0 12px 12px 0;">' + (imgHTML2 || '<div style="width:100%;height:100%;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.2);font-size:12px;">No image</div>') + '</div>'
           + '</div>';
-      }).join('');
+      } else if (titleTpl === 'title-img-bleed' && hasImg) {
+        titleContent = '<div style="position:relative;width:100%;height:100%;overflow:hidden;border-radius:0 0 12px 12px;">'
+          + '<div style="position:absolute;inset:0;">' + imgHTML2 + '</div>'
+          + '<div style="position:absolute;inset:0;background:rgba(0,0,0,.5);display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:2rem;text-align:center;">'
+          + '<div style="font-size:34px;font-weight:700;color:#fff;line-height:1.2;text-shadow:0 2px 8px rgba(0,0,0,.5);">' + esc(s.title) + '</div>'
+          + (subVal ? '<div style="font-size:16px;color:rgba(255,255,255,.85);margin-top:.5rem;text-shadow:0 1px 4px rgba(0,0,0,.5);">' + esc(subVal) + '</div>' : '')
+          + '</div></div>';
+      } else {
+        // Default: centered
+        titleContent = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:3rem 2.5rem;height:100%;background:' + t.headerBg + ';">'
+          + (hasImg ? '<div style="display:flex;gap:8px;justify-content:center;margin-bottom:1.5rem;">' + imgHTML2 + '</div>' : '')
+          + '<div style="font-size:34px;font-weight:700;color:#fff;line-height:1.2;margin-bottom:.75rem;">' + esc(s.title) + '</div>'
+          + (subVal ? '<div style="font-size:17px;color:rgba(255,255,255,.8);">' + esc(subVal) + '</div>' : '')
+          + '<div style="margin-top:2rem;font-size:9px;color:rgba(255,255,255,.3);">Designed by Myra via Claude AI</div>'
+          + '</div>';
+      }
 
-      return '<div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '" style="min-height:300px;">'
-        + '<div style="background:var(--g);padding:3.5rem 2.5rem;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:300px;">'
-        + '<div style="font-size:10px;color:rgba(255,255,255,.55);letter-spacing:.1em;text-transform:uppercase;margin-bottom:1rem;">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
-        + imageHTML
-        + '<div style="font-size:28px;font-weight:700;color:#fff;line-height:1.3;margin-bottom:' + (subtitleVal ? '1rem' : '.5rem') + ';">' + esc(s.title) + '</div>'
-        + (subtitleVal ? '<div style="font-size:16px;color:rgba(255,255,255,.8);margin-bottom:.5rem;">' + esc(subtitleVal) + '</div>' : '')
-        + (detailFields.length && e ? '<div style="margin-top:1rem;">' + detailFields.map(function(f) {
-            const isLive = f.type.startsWith('hs_') || f.type.startsWith('ac_');
-            const val = isLive ? resolveLiveField(f.type, live, snapshot) : esc(e && e.data && e.data[f.id] ? e.data[f.id] : '');
-            return val ? '<div style="font-size:13px;color:rgba(255,255,255,.75);margin-top:6px;">' + esc(f.label) + ': ' + val + '</div>' : '';
-          }).join('') + '</div>' : '')
-        + '<div style="margin-top:2.5rem;font-size:10px;color:rgba(255,255,255,.3);">Designed by Myra via Claude AI</div>'
-        + '</div>'
-        + '</div>';
+      return '<div class="pres-slide-wrap"><div class="pres-slide" data-has-hs="' + (hasHSFields?'1':'0') + '" style="background:' + t.slideBg + ';border-color:' + t.border + ';">'
+        + '<div style="font-size:9px;color:' + t.meta + ';padding:.35rem 1rem;background:' + t.headerBg + ';flex-shrink:0;">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
+        + '<div style="flex:1;min-height:0;overflow:hidden;">' + titleContent + '</div>'
+        + '</div></div>';
     }
 
-    // -- Event slide layout ------------------------------------
     if (layout === 'event') {
-      var ev = null;
-      // Find selected event from any ev_ field
+      var eventTpl = s.template || 'event-stats-img';
+      var ev2 = null;
       if (e && e.data) {
-        for (var fi2 = 0; fi2 < s.fields.length; fi2++) {
-          var fld = s.fields[fi2];
-          if (fld.type.startsWith('ev_') && e.data['_event_pick_' + fld.id]) {
-            ev = getEventByName(e.data['_event_pick_' + fld.id]);
+        for (var fi3 = 0; fi3 < s.fields.length; fi3++) {
+          var fld2 = s.fields[fi3];
+          if (fld2.type.startsWith('ev_') && e.data['_event_pick_' + fld2.id]) {
+            ev2 = getEventByName(e.data['_event_pick_' + fld2.id]);
             break;
           }
         }
       }
-      if (!ev && clickEntries.length) ev = clickEntries.find(function(ce){ return (ce.entry_type||ce.type)==='event'; });
+      if (!ev2 && clickEntries.length) ev2 = clickEntries.find(function(ce){ return (ce.entry_type||ce.type)==='event'; });
 
-      const regs  = ev ? (parseInt(ev.registrations) || 0) : 0;
-      const att   = ev ? (parseInt(ev.attendees)     || 0) : 0;
-      const rate  = regs > 0 ? Math.round(att/regs*100) + '%' : '--';
-      const clicks2 = ev ? (parseInt(ev.apply_clicks || ev.applyClicks) || 0) : 0;
-      const dateStr = ev ? formatEventDate(ev).replace(' · ','') : '--';
+      var regs2  = ev2 ? (parseInt(ev2.registrations)||0) : 0;
+      var att2   = ev2 ? (parseInt(ev2.attendees)||0)     : 0;
+      var rate2  = regs2 > 0 ? Math.round(att2/regs2*100) + '%' : '--';
+      var clk2   = ev2 ? (parseInt(ev2.apply_clicks||ev2.applyClicks)||0) : 0;
+      var dateStr2 = ev2 ? formatEventDate(ev2).replace(' · ','') : '--';
 
-      // Get image fields
-      var evImgHTML = '';
+      // Image fields
+      var evImgHTML2 = '';
       s.fields.filter(function(f){ return f.type === 'image'; }).forEach(function(f) {
-        var raw2 = e && e.data && e.data[f.id] ? e.data[f.id] : '';
-        if (!raw2) return;
-        var urls2 = [];
-        try { var p2 = JSON.parse(raw2); urls2 = Array.isArray(p2) ? p2.filter(Boolean) : (p2 ? [p2] : []); } catch(err){ urls2 = raw2 ? [raw2] : []; }
-        evImgHTML += urls2.map(function(url){ return '<img src="' + url + '" style="max-height:180px;max-width:' + (urls2.length === 1 ? '100%' : '280px') + ';border-radius:8px;object-fit:contain;flex:1;min-width:120px;display:block;margin:0 auto;" onerror="this.hidden=true">'; }).join('');
+        var raw5 = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+        if (!raw5) return;
+        var urls5 = [];
+        try { var p5=JSON.parse(raw5); urls5=Array.isArray(p5)?p5.filter(Boolean):(p5?[p5]:[]); } catch(ex){ urls5=raw5?[raw5]:[]; }
+        evImgHTML2 += urls5.map(function(u){ return '<img src="'+u+'" style="width:100%;height:100%;object-fit:cover;" onerror="this.hidden=true">'; }).join('');
       });
 
-      return '<div class="pres-slide" style="background:' + t.slideBg + ';border-color:' + t.border + ';">'
-        + '<div style="background:' + t.headerBg + ';padding:1rem 1.5rem;">'
-        + '<div style="font-size:10px;color:' + t.meta + ';">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
-        + '<div style="font-size:18px;font-weight:600;color:' + t.headerText + ';">' + esc(s.title) + '</div>'
-        + (ev ? '<div style="font-size:12px;color:' + t.meta + ';margin-top:2px;">' + esc(ev.title || ev.company || '') + (dateStr !== '--' ? ' · ' + dateStr : '') + '</div>' : '')
-        + '</div>'
-        + '<div style="padding:1.25rem;">'
-        + (evImgHTML ? '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">' + evImgHTML + '</div>' : '')
-        + (ev ? '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1rem;">'
-          + '<div style="background:' + t.border + ';border-radius:8px;padding:.75rem;text-align:center;">'
-          + '<div style="font-size:11px;color:' + t.fieldLabel + ';">Registrations</div>'
-          + '<div style="font-size:22px;font-weight:700;color:' + t.fieldValue + ';">' + regs.toLocaleString() + '</div>'
-          + '</div>'
-          + '<div style="background:' + t.border + ';border-radius:8px;padding:.75rem;text-align:center;">'
-          + '<div style="font-size:11px;color:' + t.fieldLabel + ';">Attendees</div>'
-          + '<div style="font-size:22px;font-weight:700;color:' + t.fieldValue + ';">' + att.toLocaleString() + '</div>'
-          + '</div>'
-          + '<div style="background:' + t.border + ';border-radius:8px;padding:.75rem;text-align:center;">'
-          + '<div style="font-size:11px;color:' + t.fieldLabel + ';">Attendance rate</div>'
-          + '<div style="font-size:22px;font-weight:700;color:#1db954;">' + rate + '</div>'
-          + '</div>'
-          + (clicks2 ? '<div style="background:' + t.border + ';border-radius:8px;padding:.75rem;text-align:center;">'
-          + '<div style="font-size:11px;color:' + t.fieldLabel + ';">Apply clicks</div>'
-          + '<div style="font-size:22px;font-weight:700;color:' + t.fieldValue + ';">' + clicks2.toLocaleString() + '</div>'
-          + '</div>' : '')
-          + '</div>' : '<div style="font-size:13px;color:' + t.fieldLabel + ';font-style:italic;">No event selected. Go to Data entry and pick an event for this slide.</div>')
-        + s.fields.filter(function(f){ return !f.type.startsWith('ev_') && f.type !== 'image'; }).map(function(f) {
-            var raw3 = e && e.data && e.data[f.id] ? e.data[f.id] : '';
-            var isLive3 = f.type.startsWith('hs_') || f.type.startsWith('ac_');
-            var val3 = isLive3 ? resolveLiveField(f.type, live, snapshot, null) : esc(raw3 || '--');
-            return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';">'
-              + '<div class="pres-pfield-label" style="color:' + t.fieldLabel + ';">' + esc(f.label) + '</div>'
-              + '<div class="pres-pfield-value" style="color:' + t.fieldValue + ';">' + val3 + '</div>'
-              + '</div>';
-          }).join('')
-        + (ev && ev.note ? '<div style="font-size:12px;color:' + t.fieldLabel + ';margin-top:.75rem;font-style:italic;">' + esc(ev.note) + '</div>' : '')
-        + '<div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid ' + t.border + ';font-size:10px;color:' + t.disclaimer + ';text-align:right;">Designed by Myra via Claude AI</div>'
-        + '</div>'
+      // Extra fields (not ev_ or image)
+      var extraFields2 = s.fields.filter(function(f){ return !f.type.startsWith('ev_') && f.type !== 'image'; });
+
+      function evStatCard(lbl, val, color) {
+        return '<div style="background:rgba(255,255,255,.07);border-radius:8px;padding:.6rem .75rem;text-align:center;">'
+          + '<div style="font-size:10px;color:' + t.fieldLabel + ';margin-bottom:2px;">' + lbl + '</div>'
+          + '<div style="font-size:22px;font-weight:700;color:' + (color||t.fieldValue) + ';">' + val + '</div>'
+          + '</div>';
+      }
+
+      var statsGrid = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.5rem;">'
+        + evStatCard('Registrations', regs2.toLocaleString())
+        + evStatCard('Attendees', att2.toLocaleString())
+        + evStatCard('Attendance rate', rate2, '#1db954')
+        + (clk2 ? evStatCard('Apply clicks', clk2.toLocaleString()) : '')
         + '</div>';
+
+      var evHeader = '<div style="padding:.5rem 1rem;background:' + t.headerBg + ';flex-shrink:0;">'
+        + '<div style="font-size:9px;color:' + t.meta + ';">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
+        + '<div style="font-size:15px;font-weight:600;color:' + t.headerText + ';">' + esc(s.title) + '</div>'
+        + (ev2 ? '<div style="font-size:10px;color:' + t.meta + ';">' + esc(ev2.title||ev2.company||'') + (dateStr2!=='--' ? ' &middot; ' + dateStr2 : '') + '</div>' : '')
+        + '</div>';
+
+      var evBody = '';
+      if (eventTpl === 'event-stats-img') {
+        evBody = '<div style="display:grid;grid-template-columns:1fr 1fr;flex:1;min-height:0;overflow:hidden;">'
+          + '<div style="padding:.85rem 1rem;overflow-y:auto;display:flex;flex-direction:column;gap:.75rem;">'
+          + statsGrid
+          + (extraFields2.length && e ? extraFields2.map(function(f){ var v=e.data&&e.data[f.id]?e.data[f.id]:'--'; return '<div style="padding:.35rem 0;border-bottom:1px solid '+t.border+';"><div style="font-size:10px;color:'+t.fieldLabel+';">'+esc(f.label)+'</div><div style="font-size:14px;font-weight:500;color:'+t.fieldValue+';">'+esc(v)+'</div></div>'; }).join('') : '')
+          + (ev2&&ev2.note ? '<div style="font-size:11px;color:'+t.fieldLabel+';font-style:italic;">'+esc(ev2.note)+'</div>' : '')
+          + '</div>'
+          + '<div style="overflow:hidden;background:rgba(255,255,255,.03);">'
+          + (evImgHTML2 || '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:'+t.fieldLabel+';font-size:11px;font-style:italic;">No image uploaded</div>')
+          + '</div>'
+          + '</div>';
+      } else if (eventTpl === 'event-full-stats') {
+        evBody = '<div style="padding:.85rem 1.25rem;flex:1;overflow-y:auto;">'
+          + statsGrid
+          + (extraFields2.length && e ? '<div style="margin-top:.75rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.5rem;">' + extraFields2.map(function(f){ var v=e.data&&e.data[f.id]?e.data[f.id]:'--'; return '<div style="background:rgba(255,255,255,.05);border-radius:8px;padding:.5rem .75rem;"><div style="font-size:10px;color:'+t.fieldLabel+';">'+esc(f.label)+'</div><div style="font-size:15px;font-weight:500;color:'+t.fieldValue+';">'+esc(v)+'</div></div>'; }).join('') + '</div>' : '')
+          + '</div>';
+      } else if (eventTpl === 'event-timeline') {
+        evBody = '<div style="flex:1;overflow:hidden;display:flex;flex-direction:column;">'
+          + '<div style="padding:1.25rem;text-align:center;border-bottom:1px solid ' + t.border + ';flex-shrink:0;">'
+          + '<div style="font-size:28px;font-weight:700;color:' + t.fieldValue + ';margin-bottom:4px;">' + esc(ev2?ev2.title||ev2.company||s.title:'No event selected') + '</div>'
+          + '<div style="font-size:16px;color:#1db954;">' + (dateStr2!=='--'?dateStr2:'') + '</div>'
+          + '</div>'
+          + '<div style="padding:.85rem 1.25rem;flex:1;overflow-y:auto;">' + statsGrid + '</div>'
+          + '</div>';
+      }
+
+      if (!ev2) {
+        evBody = '<div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:13px;color:'+t.fieldLabel+';font-style:italic;">No event selected. Go to Data entry and pick an event.</div>';
+      }
+
+      return '<div class="pres-slide-wrap"><div class="pres-slide" data-has-hs="' + (hasHSFields?'1':'0') + '" style="background:' + t.slideBg + ';border-color:' + t.border + ';display:flex;flex-direction:column;">'
+        + evHeader + evBody
+        + '<div style="padding:.35rem 1rem;border-top:1px solid ' + t.border + ';font-size:9px;color:' + t.disclaimer + ';text-align:right;flex-shrink:0;">Designed by Myra via Claude AI</div>'
+        + '</div></div>';
     }
 
     // -- Data slide layout with template support ----------------
@@ -2652,9 +2722,12 @@ async function buildPresHTML(snapshot) {
           + '</div>';
       }
 
-      return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';">'
-        + '<div class="pres-pfield-label" style="color:' + t.fieldLabel + ';">' + esc(f3.label) + liveBadge + '</div>'
-        + '<div class="pres-pfield-value" style="color:' + t.fieldValue + ';">' + val3 + '</div>'
+      var fCountD = s.fields.length || 1;
+      var dVal = dynFontSize(fCountD, 15, 11, 22);
+      var dLbl = dynFontSize(fCountD, 10, 9,  13);
+      return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';padding:' + (fCountD > 6 ? '.3rem' : '.5rem') + ' 0;">'
+        + '<div class="pres-pfield-label" style="color:' + t.fieldLabel + ';font-size:' + dLbl + ';">' + esc(f3.label) + liveBadge + '</div>'
+        + '<div class="pres-pfield-value" style="color:' + t.fieldValue + ';font-size:' + dVal + ';">' + val3 + '</div>'
         + '</div>';
     }
 
