@@ -735,23 +735,51 @@ const THEMES = {
 
 // ─── Dynamic font size to fill ~75% of slide ─────────────────
 function dynFontSize(fieldCount, base, min, max) {
-  // Slide body height ~540px (16:9 minus header ~60px)
-  // Each field needs: label + value + padding
-  // Target: fields fill ~75% of available height
-  var availH = 480; // approximate slide body height in px
+  // Slide body ~480px tall. Target 75% = 360px filled by fields.
+  // Each field = label (20%) + value (55%) + padding (25%) of perField
+  var availH  = 480;
   var targetH = availH * 0.75;
-  var perField = Math.floor(targetH / fieldCount);
-  // value font = ~60% of perField, label = ~25%
-  var valSize = Math.round(perField * 0.55);
+  var perField = targetH / Math.max(fieldCount, 1);
+  var valSize  = Math.round(perField * 0.55);
   return Math.max(min, Math.min(max, valSize)) + 'px';
 }
 
 function dynLabelSize(fieldCount, min, max) {
-  var availH = 480;
-  var targetH = availH * 0.75;
-  var perField = Math.floor(targetH / fieldCount);
-  var lblSize = Math.round(perField * 0.22);
+  var availH   = 480;
+  var targetH  = availH * 0.75;
+  var perField = targetH / Math.max(fieldCount, 1);
+  var lblSize  = Math.round(perField * 0.20);
   return Math.max(min, Math.min(max, lblSize)) + 'px';
+}
+
+// Called after rendering to fine-tune font sizes to fill slide
+function autoFitSlides() {
+  var slides2 = document.querySelectorAll('.pres-slide');
+  slides2.forEach(function(slide) {
+    var body = slide.querySelector('.pres-slide-body, .pres-col-wrap');
+    if (!body) return;
+    var values = slide.querySelectorAll('.pres-pfield-value');
+    if (!values.length) return;
+
+    var availH  = body.clientHeight * 0.75;
+    var perField = availH / values.length;
+    var valPx   = Math.round(perField * 0.55);
+    var lblPx   = Math.round(perField * 0.20);
+    valPx = Math.max(11, Math.min(72, valPx));
+    lblPx = Math.max(9,  Math.min(20, lblPx));
+
+    values.forEach(function(v) {
+      v.style.fontSize = valPx + 'px';
+      v.style.lineHeight = '1.1';
+    });
+    slide.querySelectorAll('.pres-pfield-label').forEach(function(l) {
+      l.style.fontSize = lblPx + 'px';
+    });
+    slide.querySelectorAll('.pres-pfield').forEach(function(p) {
+      var pad = values.length <= 2 ? '1rem' : values.length <= 4 ? '.6rem' : '.3rem';
+      p.style.padding = pad + ' 0';
+    });
+  });
 }
 
 function getSlideTheme(s) {
@@ -2693,16 +2721,25 @@ async function buildPresHTML(snapshot) {
 
       var evBody = '';
       if (eventTpl === 'event-stats-img') {
-        evBody = '<div style="display:grid;grid-template-columns:1fr 1fr;flex:1;min-height:0;overflow:hidden;">'
-          + '<div style="padding:.85rem 1rem;overflow-y:auto;display:flex;flex-direction:column;gap:.75rem;">'
-          + statsGrid
-          + (extraFields2.length && e ? extraFields2.map(function(f){ var v=e.data&&e.data[f.id]?e.data[f.id]:'--'; return '<div style="padding:.35rem 0;border-bottom:1px solid '+t.border+';"><div style="font-size:10px;color:'+t.fieldLabel+';">'+esc(f.label)+'</div><div style="font-size:14px;font-weight:500;color:'+t.fieldValue+';">'+esc(v)+'</div></div>'; }).join('') : '')
-          + (ev2&&ev2.note ? '<div style="font-size:11px;color:'+t.fieldLabel+';font-style:italic;">'+esc(ev2.note)+'</div>' : '')
-          + '</div>'
-          + '<div style="overflow:hidden;background:rgba(255,255,255,.03);">'
-          + (evImgHTML2 || '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:'+t.fieldLabel+';font-size:11px;font-style:italic;">No image uploaded</div>')
-          + '</div>'
-          + '</div>';
+        var hasEvImg2 = evImgHTML2.length > 0;
+        if (hasEvImg2) {
+          evBody = '<div style="display:grid;grid-template-columns:1fr 1fr;flex:1;min-height:0;overflow:hidden;">'
+            + '<div style="padding:.85rem 1rem;overflow-y:auto;display:flex;flex-direction:column;gap:.75rem;">'
+            + statsGrid
+            + (extraFields2.length && e ? extraFields2.map(function(f){ var v=e.data&&e.data[f.id]?e.data[f.id]:'--'; return '<div style="padding:.35rem 0;border-bottom:1px solid '+t.border+';display:flex;flex-direction:column;"><div style="font-size:10px;color:'+t.fieldLabel+';">'+esc(f.label)+'</div><div style="font-size:14px;font-weight:500;color:'+t.fieldValue+';">'+esc(v)+'</div></div>'; }).join('') : '')
+            + (ev2&&ev2.note ? '<div style="font-size:11px;color:'+t.fieldLabel+';font-style:italic;">'+esc(ev2.note)+'</div>' : '')
+            + '</div>'
+            + '<div style="overflow:hidden;background:rgba(255,255,255,.03);">'
+            + evImgHTML2
+            + '</div>'
+            + '</div>';
+        } else {
+          evBody = '<div style="padding:.85rem 1.25rem;flex:1;overflow-y:auto;">'
+            + statsGrid
+            + (extraFields2.length && e ? '<div style="margin-top:.75rem;">' + extraFields2.map(function(f){ var v=e.data&&e.data[f.id]?e.data[f.id]:'--'; return '<div style="padding:.35rem 0;border-bottom:1px solid '+t.border+';"><div style="font-size:10px;color:'+t.fieldLabel+';">'+esc(f.label)+'</div><div style="font-size:15px;font-weight:500;color:'+t.fieldValue+';">'+esc(v)+'</div></div>'; }).join('') + '</div>' : '')
+            + (ev2&&ev2.note ? '<div style="margin-top:.5rem;font-size:11px;color:'+t.fieldLabel+';font-style:italic;">'+esc(ev2.note)+'</div>' : '')
+            + '</div>';
+        }
       } else if (eventTpl === 'event-full-stats') {
         evBody = '<div style="padding:.85rem 1.25rem;flex:1;overflow-y:auto;">'
           + statsGrid
@@ -2876,6 +2913,7 @@ async function loadAndRenderPres() {
 
     if (scroll) { scroll.innerHTML = html; scroll.scrollTop = scrollPos; }
     setupPeriodBarVisibility();
+    setTimeout(autoFitSlides, 50);
   } catch(err) {
     console.error('Presentation error:', err);
     if (scroll) scroll.innerHTML = '<div style="text-align:center;padding:3rem;color:#e24b4a;">Error: ' + err.message + '</div>';
@@ -2894,6 +2932,7 @@ async function openPresentation() {
     hsPeriodMode = savedMode; hsPeriodVal = savedVal; hsYear = savedYear;
     document.getElementById('presContent').innerHTML = html;
     setupPeriodBarVisibility();
+    setTimeout(autoFitSlides, 80);
   } catch(err) {
     console.error('Presentation error:', err);
     document.getElementById('presContent').innerHTML = '<div style="text-align:center;padding:3rem;color:#e24b4a;">Error: ' + err.message + '</div>';
