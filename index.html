@@ -756,27 +756,48 @@ function dynLabelSize(fieldCount, min, max) {
 function autoFitSlides() {
   var slides2 = document.querySelectorAll('.pres-slide');
   slides2.forEach(function(slide) {
-    var body = slide.querySelector('.pres-slide-body, .pres-col-wrap');
+    var body = slide.querySelector('.pres-col-wrap, .pres-slide-body');
     if (!body) return;
+    var fields = slide.querySelectorAll('.pres-pfield');
     var values = slide.querySelectorAll('.pres-pfield-value');
     if (!values.length) return;
 
-    var availH  = body.clientHeight * 0.75;
-    var perField = availH / values.length;
-    var valPx   = Math.round(perField * 0.55);
-    var lblPx   = Math.round(perField * 0.20);
+    var availH   = body.clientHeight * 0.75;
+    var fieldCount = fields.length || values.length;
+    var perField = availH / Math.max(fieldCount, 1);
+    var valPx    = Math.round(perField * 0.55);
+    var lblPx    = Math.round(perField * 0.20);
     valPx = Math.max(11, Math.min(72, valPx));
-    lblPx = Math.max(9,  Math.min(20, lblPx));
+    lblPx = Math.max(9,  Math.min(22, lblPx));
 
     values.forEach(function(v) {
-      v.style.fontSize = valPx + 'px';
-      v.style.lineHeight = '1.1';
+      // Only resize if no children (plain text values)
+      // For list-type values (top clients etc), scale the child spans instead
+      var childSpans = v.querySelectorAll('span, div');
+      if (childSpans.length === 0) {
+        v.style.fontSize   = valPx + 'px';
+        v.style.lineHeight = '1.1';
+      } else {
+        // Scale child text elements proportionally
+        var scale = valPx / 15; // 15px is our baseline
+        childSpans.forEach(function(span) {
+          var cur = parseFloat(span.style.fontSize || '13');
+          var newSize = Math.max(9, Math.min(28, Math.round(cur * scale)));
+          span.style.fontSize = newSize + 'px';
+        });
+        // Also scale child divs padding
+        v.querySelectorAll('div[style*="padding"]').forEach(function(d) {
+          var pad = fieldCount <= 2 ? '8px 0' : fieldCount <= 4 ? '5px 0' : '3px 0';
+          d.style.padding = pad;
+        });
+      }
     });
+
     slide.querySelectorAll('.pres-pfield-label').forEach(function(l) {
       l.style.fontSize = lblPx + 'px';
     });
     slide.querySelectorAll('.pres-pfield').forEach(function(p) {
-      var pad = values.length <= 2 ? '1rem' : values.length <= 4 ? '.6rem' : '.3rem';
+      var pad = fieldCount <= 2 ? '1.2rem' : fieldCount <= 3 ? '.8rem' : fieldCount <= 5 ? '.5rem' : '.3rem';
       p.style.padding = pad + ' 0';
     });
   });
@@ -2494,7 +2515,8 @@ async function resolveLiveData() {
   return _liveCache;
 }
 
-function resolveLiveField(type, live, snapshot, ctx) {
+function resolveLiveField(type, live, snapshot, ctx, fieldCount) {
+  var fc = fieldCount || 4; // default to 4 fields if not provided
   const hs = live ? live.hs : null;
   if (!hs && type.startsWith('hs_')) return snapshot ? '[No HubSpot data]' : '<span style="color:#aaa;font-style:italic;">No HubSpot data for this period</span>';
 
@@ -2509,11 +2531,17 @@ function resolveLiveField(type, live, snapshot, ctx) {
   if (type === 'hs_top_clients') {
     if (!hs.top_clients || !hs.top_clients.length) return 'No clients yet';
     if (snapshot) return hs.top_clients.map(function(c,i){return (i+1)+'. '+c.name+' ('+fmtUSD(c.amount_usd)+')';}).join(' | ');
+    // Dynamic font: more clients = smaller text
+    var clientCount = hs.top_clients.length;
+    var clientNamePx = Math.max(11, Math.min(22, Math.round(280 / Math.max(clientCount, 1) * 0.5)));
+    var clientAmtPx  = Math.max(11, Math.min(22, clientNamePx));
+    var clientNumPx  = Math.max(9,  Math.min(14, Math.round(clientNamePx * 0.7)));
+    var clientPad    = clientCount <= 3 ? '8px 0' : clientCount <= 5 ? '5px 0' : '3px 0';
     return hs.top_clients.map(function(c,i) {
-      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.1);">'
-        + '<span style="font-size:11px;font-weight:600;color:rgba(255,255,255,.6);width:16px;">' + (i+1) + '</span>'
-        + '<span style="flex:1;font-size:13px;">' + esc(c.name) + '</span>'
-        + '<span style="font-size:13px;font-weight:600;">' + fmtUSD(c.amount_usd) + '</span>'
+      return '<div style="display:flex;align-items:center;gap:8px;padding:' + clientPad + ';border-bottom:1px solid rgba(255,255,255,.1);">'
+        + '<span style="font-size:' + clientNumPx + 'px;font-weight:600;color:rgba(255,255,255,.6);width:16px;">' + (i+1) + '</span>'
+        + '<span style="flex:1;font-size:' + clientNamePx + 'px;">' + esc(c.name) + '</span>'
+        + '<span style="font-size:' + clientAmtPx + 'px;font-weight:600;">' + fmtUSD(c.amount_usd) + '</span>'
         + '</div>';
     }).join('');
   }
@@ -2793,7 +2821,7 @@ async function buildPresHTML(snapshot) {
           + '</div>';
       }
 
-      var val3 = isLive3 ? resolveLiveField(f3.type, live, snapshot, ctx3) : (f3.type === 'text' ? escNL(raw3||'--') : esc(raw3||'--'));
+      var val3 = isLive3 ? resolveLiveField(f3.type, live, snapshot, ctx3, fCountD) : (f3.type === 'text' ? escNL(raw3||'--') : esc(raw3||'--'));
       var liveBadge = isLive3 ? ' <span style="font-size:9px;padding:1px 4px;border-radius:99px;background:rgba(29,185,84,.2);color:#1db954;">LIVE</span>' : '';
 
       if ((tpl === 'big-num' && f3.zone === 'hero') || (tpl === 'header-grid' && f3.zone === 'grid') || (tpl === 'two-col') || (tpl === 'split')) {
