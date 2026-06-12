@@ -796,6 +796,17 @@ function autoFitSlides() {
     slide.querySelectorAll('.pres-pfield-label').forEach(function(l) {
       l.style.fontSize = lblPx + 'px';
     });
+
+    // Scale event stat cards too
+    var statVals = slide.querySelectorAll('.ev-stat-val');
+    var statLbls = slide.querySelectorAll('.ev-stat-lbl');
+    if (statVals.length) {
+      var statAvailH = (body.clientHeight * 0.70);
+      var statPx = Math.max(16, Math.min(72, Math.round(statAvailH / Math.max(statVals.length, 1) * 0.6)));
+      var statLPx = Math.max(9,  Math.min(18, Math.round(statPx * 0.28)));
+      statVals.forEach(function(v) { v.style.fontSize = statPx + 'px'; });
+      statLbls.forEach(function(l) { l.style.fontSize = statLPx + 'px'; });
+    }
     slide.querySelectorAll('.pres-pfield').forEach(function(p) {
       var pad = fieldCount <= 2 ? '1.2rem' : fieldCount <= 3 ? '.8rem' : fieldCount <= 5 ? '.5rem' : '.3rem';
       p.style.padding = pad + ' 0';
@@ -2727,10 +2738,16 @@ async function buildPresHTML(snapshot) {
       // Extra fields (not ev_ or image)
       var extraFields2 = s.fields.filter(function(f){ return !f.type.startsWith('ev_') && f.type !== 'image'; });
 
+      // Calculate stat card font sizes based on number of stats shown
+      var statCount = 3 + (clk2 ? 1 : 0) + (extraFields2.length || 0);
+      var statValPx = Math.max(16, Math.min(64, Math.round(300 / Math.max(statCount, 1))));
+      var statLblPx = Math.max(9,  Math.min(16, Math.round(statValPx * 0.28)));
+      var statPad   = statCount <= 2 ? '1.2rem 1rem' : statCount <= 3 ? '.9rem .85rem' : '.6rem .75rem';
+
       function evStatCard(lbl, val, color) {
-        return '<div style="background:rgba(255,255,255,.07);border-radius:8px;padding:.6rem .75rem;text-align:center;">'
-          + '<div style="font-size:10px;color:' + t.fieldLabel + ';margin-bottom:2px;">' + lbl + '</div>'
-          + '<div style="font-size:22px;font-weight:700;color:' + (color||t.fieldValue) + ';">' + val + '</div>'
+        return '<div class="ev-stat-card" style="background:rgba(255,255,255,.07);border-radius:8px;padding:' + statPad + ';text-align:center;">'
+          + '<div class="ev-stat-lbl" style="font-size:' + statLblPx + 'px;color:' + t.fieldLabel + ';margin-bottom:4px;">' + lbl + '</div>'
+          + '<div class="ev-stat-val" style="font-size:' + statValPx + 'px;font-weight:700;color:' + (color||t.fieldValue) + ';line-height:1.1;">' + val + '</div>'
           + '</div>';
       }
 
