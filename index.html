@@ -195,17 +195,18 @@ input, select, textarea { font-family: var(--font); }
 .pres-btn:hover { background: #2a2a28; }
 .pres-btn-green { background: var(--g); color: #fff; border-color: var(--g); }
 .pres-btn-green:hover { background: var(--g-dark); }
-.pres-scroll { flex: 1; overflow-y: auto; padding: 1.5rem; }
-.pres-slide { max-width: 100%; width: 100%; margin: 0 0 1.5rem; background: #1a1a18; border: 1px solid #2a2a28; border-radius: 12px; overflow: hidden; }
-.pres-slide-head { background: var(--g); padding: 1.25rem 1.5rem; }
-.pres-slide-num { font-size: 11px; color: rgba(255,255,255,.6); margin-bottom: 3px; }
-.pres-slide-title { font-size: 20px; font-weight: 600; color: #fff; }
-.pres-slide-body { padding: 1.5rem; }
-.pres-pfield { padding: 10px 0; border-bottom: 1px solid #2a2a28; }
+.pres-scroll { flex: 1; overflow-y: auto; padding: 2rem 1.5rem; background: #111110; }
+.pres-slide-wrap { max-width: 1200px; margin: 0 auto 2rem; }
+.pres-slide { width: 100%; aspect-ratio: 16/9; background: #1a1a18; border: 1px solid #2a2a28; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; position: relative; }
+.pres-slide-head { background: var(--g); padding: .6rem 1.25rem; flex-shrink: 0; }
+.pres-slide-num { font-size: 9px; color: rgba(255,255,255,.5); margin-bottom: 2px; }
+.pres-slide-title { font-size: 16px; font-weight: 600; color: #fff; }
+.pres-slide-body { padding: .85rem 1.25rem; overflow-y: auto; flex: 1; min-height: 0; }
+.pres-pfield { padding: .4rem 0; border-bottom: 1px solid #2a2a28; }
 .pres-pfield:last-child { border-bottom: none; padding-bottom: 0; }
-.pres-pfield-label { font-size: 11px; color: #6a6a68; margin-bottom: 3px; }
-.pres-pfield-value { font-size: 16px; font-weight: 500; color: #f0f0ee; }
-.pres-pfield-empty { font-size: 13px; color: #3a3a38; font-style: italic; }
+.pres-pfield-label { font-size: 10px; color: #6a6a68; margin-bottom: 2px; }
+.pres-pfield-value { font-size: 15px; font-weight: 500; color: #f0f0ee; }
+.pres-pfield-empty { font-size: 12px; color: #3a3a38; font-style: italic; }
 .pres-slide-meta { font-size: 10px; color: #4a4a48; margin-top: 12px; font-family: var(--mono); }
 
 /* ─── UTILS ──────────────────────────────────────────────── */
@@ -217,6 +218,20 @@ input, select, textarea { font-family: var(--font); }
 .config-banner code { font-family: var(--mono); background: rgba(0,0,0,.06); padding: 1px 5px; border-radius: 4px; }
 .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #111; color: #fff; padding: 10px 20px; border-radius: 99px; font-size: 13px; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 999; white-space: nowrap; border: 1px solid #2a2a28; }
 .toast.show { opacity: 1; }
+/* ─── PRESENTATION LAYOUT TEMPLATES ─────────────────────── */
+.pres-col-wrap { display: grid; gap: .85rem; height: 100%; padding: .85rem 1.25rem; box-sizing: border-box; }
+.pres-col-wrap.tpl-full { grid-template-columns: 1fr; }
+.pres-col-wrap.tpl-two-col { grid-template-columns: 1fr 1fr; }
+.pres-col-wrap.tpl-split { grid-template-columns: 1.1fr .9fr; }
+.pres-col-wrap.tpl-big-num { grid-template-rows: auto 1fr; }
+.pres-col-wrap.tpl-header-grid { grid-template-rows: auto 1fr; }
+.pres-zone { overflow-y: auto; min-width: 0; }
+.pres-hero-num { font-size: 52px; font-weight: 700; line-height: 1; margin-bottom: 4px; }
+.pres-hero-lbl { font-size: 12px; opacity: .6; }
+.pres-metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .6rem; }
+.pres-metric-card { border-radius: 8px; padding: .6rem .75rem; background: rgba(255,255,255,.05); }
+.pres-metric-val { font-size: 20px; font-weight: 600; }
+.pres-metric-lbl { font-size: 10px; opacity: .55; margin-bottom: 2px; }
 </style>
 </head>
 <body>
@@ -527,7 +542,8 @@ async function saveSlide(s) {
   if (CONFIGURED) {
     await _supabase.from('slides').upsert({
       id: s.id, title: s.title, fields: s.fields,
-      position: s.position ?? 0, layout: s.layout || 'data'
+      position: s.position ?? 0, layout: s.layout || 'data',
+      theme: s.theme || null, template: s.template || 'full'
     });
   } else {
     lsSet('ogsm_slides', slides);
@@ -683,6 +699,20 @@ function buildPages() {
   document.getElementById('pages').innerHTML = TABS[currentRole].map((t, i) =>
     `<div class="page${i === 0 ? ' active' : ''}" id="page-${t.id}"></div>`
   ).join('');
+}
+
+// --- Slide layout templates ---------------------------
+const SLIDE_TEMPLATES = {
+  'full':        { label: 'Full width',    zones: ['main'],        desc: 'Single column' },
+  'two-col':     { label: 'Two columns',   zones: ['left','right'], desc: 'Equal left/right columns' },
+  'split':       { label: 'Split',         zones: ['left','right'], desc: 'Wider left, narrower right' },
+  'big-num':     { label: 'Big number',    zones: ['hero','rest'],  desc: 'Hero metric + fields below' },
+  'header-grid': { label: 'Header + grid', zones: ['header','grid'],desc: 'Header row + metric grid' },
+};
+
+function getFieldZone(f, tpl) {
+  if (!tpl || tpl === 'full') return 'main';
+  return f.zone || SLIDE_TEMPLATES[tpl] && SLIDE_TEMPLATES[tpl].zones[0] || 'main';
 }
 
 // --- Presentation theme ---------------------------------
@@ -1669,6 +1699,13 @@ function renderSlideCard(s, idx) {
         <option value="title" ${(s.layout||'data')==='title' ? 'selected' : ''}>Title</option>
         <option value="event" ${(s.layout||'data')==='event' ? 'selected' : ''}>Event</option>
       </select>
+      <select onchange="event.stopPropagation(); setSlideTemplate('${s.id}', this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);" title="Slide template">
+        <option value="full"        ${(s.template||'full')==='full'        ? 'selected':''}>Full width</option>
+        <option value="two-col"     ${(s.template||'full')==='two-col'     ? 'selected':''}>Two columns</option>
+        <option value="split"       ${(s.template||'full')==='split'       ? 'selected':''}>Split</option>
+        <option value="big-num"     ${(s.template||'full')==='big-num'     ? 'selected':''}>Big number</option>
+        <option value="header-grid" ${(s.template||'full')==='header-grid' ? 'selected':''}>Header + grid</option>
+      </select>
       <select onchange="event.stopPropagation(); setSlideTheme('${s.id}', this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);" title="Slide theme">
         <option value="global" ${!s.theme ? 'selected' : ''}>Theme: Global</option>
         <option value="light"  ${s.theme==='light'  ? 'selected' : ''}>Light</option>
@@ -1707,6 +1744,11 @@ function renderSlideCard(s, idx) {
               onclick="event.stopPropagation();startEditFieldLabel('${s.id}','${f.id}',this)"
               id="fl_label_${f.id}">${esc(f.label)}</div>
             <div class="field-pill-type">${f.type}</div>
+            ${(s.template && s.template !== 'full' && SLIDE_TEMPLATES[s.template]) ? `
+            <select onchange="event.stopPropagation();setFieldZone('${s.id}','${f.id}',this.value)"
+              style="font-size:10px;padding:2px 5px;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--ink);" title="Zone">
+              ${SLIDE_TEMPLATES[s.template].zones.map(z => '<option value="' + z + '"' + (f.zone===z?' selected':'') + '>' + z + '</option>').join('')}
+            </select>` : ''}
             <button class="btn-icon-sm" onclick="deleteField('${s.id}', '${f.id}')">&#10005;</button>
           </div>`).join('')}
         ${!s.fields.length ? `<div style="font-size:12px;color:var(--ink3);padding:4px 0">No fields yet -- add one below.</div>` : ''}
@@ -1949,6 +1991,32 @@ async function saveFieldLabel(slideId, fieldId, newLabel, el) {
   await saveSlide(s);
   renderEntry();
   showToast('Field label updated');
+}
+
+async function setSlideTemplate(id, tpl) {
+  const s = slides.find(function(sl){ return sl.id === id; });
+  if (!s) return;
+  s.template = tpl;
+  // Assign default zones to fields that don't have one
+  const zones = SLIDE_TEMPLATES[tpl] ? SLIDE_TEMPLATES[tpl].zones : ['main'];
+  s.fields.forEach(function(f, i) {
+    if (!f.zone || !zones.includes(f.zone)) {
+      f.zone = zones[i % zones.length];
+    }
+  });
+  await saveSlide(s);
+  renderBuilder();
+  showToast('Template updated');
+}
+
+async function setFieldZone(slideId, fieldId, zone) {
+  const s = slides.find(function(sl){ return sl.id === slideId; });
+  if (!s) return;
+  const f = s.fields.find(function(fi){ return fi.id === fieldId; });
+  if (!f) return;
+  f.zone = zone;
+  await saveSlide(s);
+  showToast('Field moved to ' + zone);
 }
 
 async function changeSlideLayout(id, layout) {
@@ -2546,57 +2614,83 @@ async function buildPresHTML(snapshot) {
         + '</div>';
     }
 
-    // -- Data slide layout (default) ---------------------------
-    return '<div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '" style="background:' + t.slideBg + ';border-color:' + t.border + ';">'
-      + '<div class="pres-slide-head" style="background:' + t.headerBg + ';">'
-      + '<div class="pres-slide-num" style="color:' + t.meta + '">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
-      + '<div class="pres-slide-title" style="color:' + t.headerText + '">' + esc(s.title) + '</div>'
-      + (periodLabel && hasLiveFields ? '<div style="font-size:11px;color:' + t.meta + ';margin-top:2px;">Period: ' + esc(periodLabel) + '</div>' : '')
+    // -- Data slide layout with template support ----------------
+    var tpl = s.template || 'full';
+    var tplDef = SLIDE_TEMPLATES[tpl] || SLIDE_TEMPLATES['full'];
+    var zones = tplDef.zones;
+
+    var fieldsByZone = {};
+    zones.forEach(function(z){ fieldsByZone[z] = []; });
+    s.fields.forEach(function(f2) {
+      var z2 = f2.zone && zones.includes(f2.zone) ? f2.zone : zones[0];
+      fieldsByZone[z2].push(f2);
+    });
+
+    function renderField2(f3) {
+      var isLive3 = f3.type.startsWith('hs_') || f3.type.startsWith('ac_') || f3.type.startsWith('ev_');
+      var raw3 = e && e.data && e.data[f3.id] ? e.data[f3.id] : '';
+      var ctx3 = f3.type.startsWith('ev_') && e && e.data ? { _evName: e.data['_event_pick_' + f3.id] || '' } : null;
+
+      if (f3.type === 'image') {
+        var imgs3 = [];
+        try { var p3 = JSON.parse(raw3||'[]'); imgs3 = Array.isArray(p3)?p3.filter(Boolean):(p3?[p3]:[]); } catch(ex){ imgs3=raw3?[raw3]:[]; }
+        return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';">'
+          + '<div class="pres-pfield-label" style="color:' + t.fieldLabel + ';">' + esc(f3.label) + '</div>'
+          + (imgs3.length ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;justify-content:center;">'
+            + imgs3.map(function(u){ return '<img src="'+u+'" style="max-height:150px;max-width:'+(imgs3.length===1?'100%':'calc(50% - 3px)')+';border-radius:6px;object-fit:contain;" onerror="this.hidden=true">'; }).join('')
+            + '</div>' : '<div class="pres-pfield-empty">No image</div>')
+          + '</div>';
+      }
+
+      var val3 = isLive3 ? resolveLiveField(f3.type, live, snapshot, ctx3) : (f3.type === 'text' ? escNL(raw3||'--') : esc(raw3||'--'));
+      var liveBadge = isLive3 ? ' <span style="font-size:9px;padding:1px 4px;border-radius:99px;background:rgba(29,185,84,.2);color:#1db954;">LIVE</span>' : '';
+
+      if ((tpl === 'big-num' && f3.zone === 'hero') || (tpl === 'header-grid' && f3.zone === 'grid') || (tpl === 'two-col') || (tpl === 'split')) {
+        return '<div class="pres-metric-card" style="background:rgba(255,255,255,.05);margin-bottom:6px;">'
+          + '<div class="pres-metric-lbl" style="color:' + t.fieldLabel + ';">' + esc(f3.label) + liveBadge + '</div>'
+          + '<div class="pres-metric-val" style="color:' + t.fieldValue + ';font-size:18px;">' + val3 + '</div>'
+          + '</div>';
+      }
+
+      return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';">'
+        + '<div class="pres-pfield-label" style="color:' + t.fieldLabel + ';">' + esc(f3.label) + liveBadge + '</div>'
+        + '<div class="pres-pfield-value" style="color:' + t.fieldValue + ';">' + val3 + '</div>'
+        + '</div>';
+    }
+
+    var bodyHTML = '';
+    if (tpl === 'full') {
+      bodyHTML = '<div class="pres-col-wrap tpl-full"><div class="pres-zone" style="overflow-y:auto;">'
+        + (fieldsByZone['main']||[]).map(renderField2).join('')
+        + (e ? '<div class="pres-slide-meta" style="margin-top:.75rem;color:' + t.meta + ';">Updated ' + fmtTs(e.ts||e.created_at) + ' &middot; ' + esc(e.by) + '</div>' : '')
+        + '<div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid ' + t.border + ';font-size:9px;color:' + t.disclaimer + ';text-align:right;">Designed by Myra via Claude AI</div>'
+        + '</div></div>';
+    } else if (tpl === 'two-col' || tpl === 'split') {
+      var cls3 = tpl === 'split' ? 'tpl-split' : 'tpl-two-col';
+      bodyHTML = '<div class="pres-col-wrap ' + cls3 + '">'
+        + '<div class="pres-zone" style="overflow-y:auto;">' + (fieldsByZone['left']||[]).map(renderField2).join('') + '</div>'
+        + '<div class="pres-zone" style="overflow-y:auto;">' + (fieldsByZone['right']||[]).map(renderField2).join('') + '</div>'
+        + '</div>';
+    } else if (tpl === 'big-num') {
+      bodyHTML = '<div class="pres-col-wrap" style="grid-template-rows:auto 1fr;gap:.75rem;">'
+        + '<div class="pres-zone" style="text-align:center;padding:.5rem 0;border-bottom:1px solid ' + t.border + ';">' + (fieldsByZone['hero']||[]).map(renderField2).join('') + '</div>'
+        + '<div class="pres-zone pres-metric-grid">' + (fieldsByZone['rest']||[]).map(renderField2).join('') + '</div>'
+        + '</div>';
+    } else if (tpl === 'header-grid') {
+      bodyHTML = '<div class="pres-col-wrap" style="grid-template-rows:auto 1fr;gap:.75rem;">'
+        + '<div class="pres-zone">' + (fieldsByZone['header']||[]).map(renderField2).join('') + '</div>'
+        + '<div class="pres-zone"><div class="pres-metric-grid">' + (fieldsByZone['grid']||[]).map(renderField2).join('') + '</div></div>'
+        + '</div>';
+    }
+
+    return '<div class="pres-slide-wrap"><div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '" style="background:' + t.slideBg + ';border-color:' + t.border + ';">'
+      + '<div class="pres-slide-head" style="background:' + t.headerBg + ';flex-shrink:0;">'
+      + '<div class="pres-slide-num" style="color:' + t.meta + ';">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
+      + '<div class="pres-slide-title" style="color:' + t.headerText + ';">' + esc(s.title) + '</div>'
+      + (periodLabel && hasLiveFields ? '<div style="font-size:10px;color:' + t.meta + ';margin-top:1px;">Period: ' + esc(periodLabel) + '</div>' : '')
       + '</div>'
-      + '<div class="pres-slide-body">'
-      + (e && e.period ? '<div class="pres-slide-meta" style="margin-bottom:1rem;color:' + t.meta + '">Period: ' + esc(e.period) + '</div>' : '')
-      + s.fields.map(function(f) {
-          const isLive = f.type.startsWith('hs_') || f.type.startsWith('ac_');
-          const rawVal = e && e.data && e.data[f.id] ? e.data[f.id] : '';
-
-          // Image field rendering (supports multiple images as JSON array)
-          if (f.type === 'image') {
-            var imgUrls = [];
-            try {
-              var parsed = JSON.parse(rawVal || '[]');
-              imgUrls = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
-            } catch(err) { imgUrls = rawVal ? [rawVal] : []; }
-            var imgGrid = imgUrls.length
-              ? '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;justify-content:center;">'
-                + imgUrls.map(function(url) {
-                    return url ? '<img src="' + url + '" style="max-height:260px;max-width:' + (imgUrls.length === 1 ? '100%' : 'calc(50% - 4px)') + ';border-radius:8px;object-fit:contain;flex:1;min-width:120px;display:block;margin:0 auto;" onerror="this.hidden=true">' : '';
-                  }).join('')
-                + '</div>'
-              : '<div class="pres-pfield-empty">No images uploaded yet.</div>';
-            return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';">'
-              + '<div class="pres-pfield-label" style="color:' + t.fieldLabel + ';">' + esc(f.label) + '</div>'
-              + imgGrid + '</div>';
-          }
-
-          // Build context for ev_ fields (event name picker)
-          var fieldCtx = null;
-          if (f.type.startsWith('ev_') && e && e.data) {
-            fieldCtx = { _evName: e.data['_event_pick_' + f.id] || '' };
-          }
-          const value = isLive
-            ? resolveLiveField(f.type, live, snapshot, fieldCtx)
-            : (f.type === 'text' ? escNL(rawVal || '--') : esc(rawVal || '--'));
-
-          return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';">' 
-            + '<div class="pres-pfield-label">' + esc(f.label) + (isLive ? ' <span style="font-size:9px;padding:1px 5px;border-radius:99px;background:rgba(29,185,84,.2);color:#1db954;font-weight:600;">LIVE</span>' : '') + '</div>'
-            + '<div class="pres-pfield-value" style="color:' + t.fieldValue + ';">' + value + '</div>'
-            + '</div>';
-        }).join('')
-      + (!e && !hasLiveFields ? '<div class="pres-pfield-empty">No data entered yet.</div>' : '')
-      + (e ? '<div class="pres-slide-meta" style="margin-top:12px;color:' + t.meta + ';">Updated ' + fmtTs(e.ts || e.created_at) + ' · ' + esc(e.by) + '</div>' : '')
-      + disclaimer
-      + '</div>'
-      + '</div>';
+      + bodyHTML
+      + '</div></div>';
   }).join('');
 }
 
