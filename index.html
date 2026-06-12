@@ -733,12 +733,25 @@ const THEMES = {
   cake:  { slideBg:'#1db954', slideText:'#ffffff',  headerBg:'#0f6e34', headerText:'#ffffff', fieldLabel:'rgba(255,255,255,.65)', fieldValue:'#ffffff', border:'rgba(255,255,255,.2)', meta:'rgba(255,255,255,.4)', disclaimer:'rgba(255,255,255,.3)' },
 };
 
-// ─── Dynamic font size based on field count ───────────────────
+// ─── Dynamic font size to fill ~75% of slide ─────────────────
 function dynFontSize(fieldCount, base, min, max) {
-  // More fields = smaller font, fewer fields = larger font
-  var scale = Math.max(0.6, Math.min(1.4, 1.4 - (fieldCount - 1) * 0.08));
-  var size = Math.round(base * scale);
-  return Math.max(min, Math.min(max, size)) + 'px';
+  // Slide body height ~540px (16:9 minus header ~60px)
+  // Each field needs: label + value + padding
+  // Target: fields fill ~75% of available height
+  var availH = 480; // approximate slide body height in px
+  var targetH = availH * 0.75;
+  var perField = Math.floor(targetH / fieldCount);
+  // value font = ~60% of perField, label = ~25%
+  var valSize = Math.round(perField * 0.55);
+  return Math.max(min, Math.min(max, valSize)) + 'px';
+}
+
+function dynLabelSize(fieldCount, min, max) {
+  var availH = 480;
+  var targetH = availH * 0.75;
+  var perField = Math.floor(targetH / fieldCount);
+  var lblSize = Math.round(perField * 0.22);
+  return Math.max(min, Math.min(max, lblSize)) + 'px';
 }
 
 function getSlideTheme(s) {
@@ -2601,16 +2614,43 @@ async function buildPresHTML(snapshot) {
     if (layout === 'event') {
       var eventTpl = s.template || 'event-stats-img';
       var ev2 = null;
+
+      // 1. Try _event_pick_ from saved entry data
       if (e && e.data) {
         for (var fi3 = 0; fi3 < s.fields.length; fi3++) {
           var fld2 = s.fields[fi3];
           if (fld2.type.startsWith('ev_') && e.data['_event_pick_' + fld2.id]) {
             ev2 = getEventByName(e.data['_event_pick_' + fld2.id]);
-            break;
+            if (ev2) break;
           }
         }
       }
-      if (!ev2 && clickEntries.length) ev2 = clickEntries.find(function(ce){ return (ce.entry_type||ce.type)==='event'; });
+
+      // 2. Try matching event by slide title
+      if (!ev2) {
+        var titleLower = s.title.toLowerCase();
+        ev2 = clickEntries.find(function(ce) {
+          if ((ce.entry_type||ce.type) !== 'event') return false;
+          var evTitle = (ce.title || ce.company || '').toLowerCase();
+          return evTitle && (titleLower.includes(evTitle) || evTitle.includes(titleLower));
+        });
+      }
+
+      // 3. Try any entry data that has event name stored
+      if (!ev2 && e && e.data) {
+        var keys = Object.keys(e.data);
+        for (var ki = 0; ki < keys.length; ki++) {
+          if (keys[ki].startsWith('_event_pick_') && e.data[keys[ki]]) {
+            ev2 = getEventByName(e.data[keys[ki]]);
+            if (ev2) break;
+          }
+        }
+      }
+
+      // 4. Last resort: first event in clickEntries
+      if (!ev2 && clickEntries.length) {
+        ev2 = clickEntries.find(function(ce){ return (ce.entry_type||ce.type)==='event'; });
+      }
 
       var regs2  = ev2 ? (parseInt(ev2.registrations)||0) : 0;
       var att2   = ev2 ? (parseInt(ev2.attendees)||0)     : 0;
@@ -2726,15 +2766,16 @@ async function buildPresHTML(snapshot) {
           + '</div>';
       }
 
-      return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';padding:' + (fCountD > 6 ? '.3rem' : '.5rem') + ' 0;">'
+      var fieldPad = fCountD <= 2 ? '1rem' : fCountD <= 4 ? '.6rem' : fCountD <= 6 ? '.4rem' : '.25rem';
+      return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';padding:' + fieldPad + ' 0;">'
         + '<div class="pres-pfield-label" style="color:' + t.fieldLabel + ';font-size:' + dLbl + ';">' + esc(f3.label) + liveBadge + '</div>'
         + '<div class="pres-pfield-value" style="color:' + t.fieldValue + ';font-size:' + dVal + ';">' + val3 + '</div>'
         + '</div>';
     }
 
-    var fCountD = s.fields.length || 1;
-    var dVal    = dynFontSize(fCountD, 15, 11, 22);
-    var dLbl    = dynFontSize(fCountD, 10, 9,  13);
+    var fCountD = s.fields.filter(function(f){ return f.type !== 'image'; }).length || 1;
+    var dVal    = dynFontSize(fCountD, 15, 11, 42);
+    var dLbl    = dynLabelSize(fCountD, 9, 16);
 
     var bodyHTML = '';
     if (tpl === 'full') {
