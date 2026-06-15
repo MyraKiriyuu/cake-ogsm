@@ -998,8 +998,23 @@ function renderClicks() {
         </div>
       </div>
 
-      <!-- Job posting entry form -->
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
+      <!-- Terminology glossary -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem 1.25rem;font-size:12px;color:var(--ink2);line-height:1.7;">
+        <div style="font-weight:600;color:var(--ink);margin-bottom:.4rem;">&#9432; What do these terms mean?</div>
+        <div><b>Unique job views</b> &mdash; the number of distinct people who viewed a job posting page on Cake. If the same person views it multiple times, it counts once.</div>
+        <div style="margin-top:.35rem;"><b>Apply clicks</b> &mdash; the number of times people clicked "Apply" on a job posting, which redirects them to the company's application portal. This measures intent to apply, not confirmed applications.</div>
+        <div style="margin-top:.35rem;color:var(--ink3);">Together they form a funnel: views &rarr; clicks shows how compelling a job posting is.</div>
+      </div>
+
+      <!-- Entry mode tabs -->
+      <div style="display:flex;gap:6px;background:var(--surface);border-radius:10px;padding:4px;">
+        <button id="jobModeBtn-single" class="entry-mode-btn active" onclick="setJobEntryMode('single')" style="flex:1;padding:8px;font-size:12px;font-weight:500;border:none;border-radius:7px;cursor:pointer;background:var(--card);color:var(--ink);">Single job</button>
+        <button id="jobModeBtn-table" class="entry-mode-btn" onclick="setJobEntryMode('table')" style="flex:1;padding:8px;font-size:12px;font-weight:500;border:none;border-radius:7px;cursor:pointer;background:transparent;color:var(--ink2);">Multiple jobs (table)</button>
+        <button id="jobModeBtn-company" class="entry-mode-btn" onclick="setJobEntryMode('company')" style="flex:1;padding:8px;font-size:12px;font-weight:500;border:none;border-radius:7px;cursor:pointer;background:transparent;color:var(--ink2);">Company total (quarter)</button>
+      </div>
+
+      <!-- Job posting entry form (single) -->
+      <div id="jobMode-single" style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
         <div style="background:#185FA5;padding:.85rem 1.25rem;">
           <div style="font-size:14px;font-weight:600;color:#fff;">Log a job posting</div>
           <div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px;">Track performance of individual job listings on Cake. Log views and apply clicks per job per period.</div>
@@ -1016,6 +1031,56 @@ function renderClicks() {
           <div class="entry-field"><label>Notes (optional)</label><input type="text" id="job-note" placeholder="Any additional context"></div>
           <div style="padding-top:.75rem;border-top:1px solid var(--border);">
             <button class="btn btn-primary" onclick="submitClickEntry('job')" style="width:100%;background:#185FA5;border-color:#185FA5;">&#10003; Save job entry</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Job posting entry form (table - multiple jobs at once) -->
+      <div id="jobMode-table" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
+        <div style="background:#185FA5;padding:.85rem 1.25rem;">
+          <div style="font-size:14px;font-weight:600;color:#fff;">Log multiple job postings</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px;">Add a row for each job posting. Fill in what you have and click Save all -- empty rows are skipped.</div>
+        </div>
+        <div style="padding:1.25rem;">
+          <div class="entry-field"><label>Period * <span style="font-weight:400;color:var(--ink3);">(applies to all rows)</span></label><input type="text" id="jobtable-period" placeholder="e.g. Q2 2026 or May 2026"></div>
+          <div style="overflow-x:auto;margin-top:.5rem;">
+            <table id="jobTable" style="width:100%;border-collapse:collapse;font-size:12px;min-width:640px;">
+              <thead>
+                <tr style="text-align:left;color:var(--ink3);">
+                  <th style="padding:6px 8px;font-weight:500;width:24%;">Company *</th>
+                  <th style="padding:6px 8px;font-weight:500;width:28%;">Job title *</th>
+                  <th style="padding:6px 8px;font-weight:500;width:16%;">Job slug</th>
+                  <th style="padding:6px 8px;font-weight:500;width:12%;">Views</th>
+                  <th style="padding:6px 8px;font-weight:500;width:12%;">Clicks</th>
+                  <th style="width:8%;"></th>
+                </tr>
+              </thead>
+              <tbody id="jobTableBody"></tbody>
+            </table>
+          </div>
+          <button class="btn" onclick="addJobTableRow()" style="margin-top:.5rem;font-size:12px;">+ Add row</button>
+          <div style="padding-top:.75rem;border-top:1px solid var(--border);margin-top:.75rem;">
+            <button class="btn btn-primary" onclick="submitJobTable()" style="width:100%;background:#185FA5;border-color:#185FA5;">&#10003; Save all rows</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Company-level quarterly aggregate -->
+      <div id="jobMode-company" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
+        <div style="background:#185FA5;padding:.85rem 1.25rem;">
+          <div style="font-size:14px;font-weight:600;color:#fff;">Log a company total for a quarter</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px;">Use this when you only have a combined number from a company across all their job postings -- no individual job breakdown needed.</div>
+        </div>
+        <div style="padding:1.25rem;">
+          <div class="entry-field"><label>Company *</label><input type="text" id="co-company" placeholder="e.g. PT PMCI (UNIQLO)"></div>
+          <div class="entry-field"><label>Period *</label><input type="text" id="co-period" placeholder="e.g. Q2 2026 or May 2026"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="entry-field"><label>Total unique job views</label><input type="number" id="co-views" placeholder="0" min="0"></div>
+            <div class="entry-field"><label>Total apply clicks</label><input type="number" id="co-clicks" placeholder="0" min="0"></div>
+          </div>
+          <div class="entry-field"><label>Notes (optional)</label><input type="text" id="co-note" placeholder="e.g. Combined total across all open roles"></div>
+          <div style="padding-top:.75rem;border-top:1px solid var(--border);">
+            <button class="btn btn-primary" onclick="submitCompanyTotal()" style="width:100%;background:#185FA5;border-color:#185FA5;">&#10003; Save company total</button>
           </div>
         </div>
       </div>
@@ -1086,8 +1151,9 @@ function renderClickItem(e) {
   const views     = parseInt(e.job_views || e.jobViews) || 0;
   const attRate   = regs > 0 ? Math.round(att / regs * 100) : null;
   const convRate  = views > 0 ? Math.round(clicks / views * 100) : null;
-  const color     = isEvent ? 'var(--g)' : '#185FA5';
-  const label     = isEvent ? 'Event' : 'Job posting';
+  const isCompanyTotal = !isEvent && (e.title === 'Company total (all postings)');
+  const color     = isEvent ? 'var(--g)' : isCompanyTotal ? '#6B4FA0' : '#185FA5';
+  const label     = isEvent ? 'Event' : isCompanyTotal ? 'Company total' : 'Job posting';
   const title     = e.title || e.job_title || e.deal_name || '--';
   const company   = e.company || '--';
   const period    = e.period || (e.event_date ? e.event_date.slice(0,10) : '--');
@@ -1101,9 +1167,9 @@ function renderClickItem(e) {
     + '<div>'
     + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">'
     + '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;background:' + color + ';color:#fff;">' + label + '</span>'
-    + '<span style="font-size:13px;font-weight:600;color:var(--ink);">' + esc(title) + '</span>'
+    + '<span style="font-size:13px;font-weight:600;color:var(--ink);">' + (isCompanyTotal ? esc(company) : esc(title)) + '</span>'
     + '</div>'
-    + '<div style="font-size:11px;color:var(--ink2);">' + esc(company) + (slug ? ' · <span style="font-family:var(--mono);font-size:10px;">' + esc(slug) + '</span>' : '') + '</div>'
+    + '<div style="font-size:11px;color:var(--ink2);">' + (isCompanyTotal ? 'All job postings combined' : esc(company)) + (slug ? ' · <span style="font-family:var(--mono);font-size:10px;">' + esc(slug) + '</span>' : '') + '</div>'
     + '<div class="hist-ts">' + fmtTs(ts) + ' · by ' + esc(by) + (note ? ' · ' + esc(note) : '') + '</div>'
     + '</div>'
     + (currentRole === 'admin' ? '<button class="btn btn-sm btn-danger" onclick="deleteClickEntry(' + JSON.stringify(e.id || '') + ')">Delete</button>' : '')
@@ -1274,6 +1340,101 @@ async function confirmCSVUpload() {
   if (btn) { btn.textContent = '&#10003; Save all entries'; btn.disabled = false; }
   renderClicks();
   showToast(saved + ' entr' + (saved !== 1 ? 'ies' : 'y') + ' saved!');
+}
+
+// ─── Job entry mode tabs ────────────────────────────────────
+function setJobEntryMode(mode) {
+  ['single','table','company'].forEach(function(m) {
+    var panel = document.getElementById('jobMode-' + m);
+    var btn   = document.getElementById('jobModeBtn-' + m);
+    if (panel) panel.style.display = (m === mode) ? '' : 'none';
+    if (btn) {
+      btn.style.background = (m === mode) ? 'var(--card)' : 'transparent';
+      btn.style.color      = (m === mode) ? 'var(--ink)'  : 'var(--ink2)';
+    }
+  });
+  if (mode === 'table' && !document.getElementById('jobTableBody').children.length) {
+    addJobTableRow(); addJobTableRow(); addJobTableRow();
+  }
+}
+
+// ─── Job table (multiple rows) ─────────────────────────────
+function addJobTableRow() {
+  var tbody = document.getElementById('jobTableBody');
+  var row = document.createElement('tr');
+  row.innerHTML =
+    '<td style="padding:4px;"><input type="text" class="jt-company" placeholder="Company" style="width:100%;padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);"></td>'
+    + '<td style="padding:4px;"><input type="text" class="jt-title" placeholder="Job title" style="width:100%;padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);"></td>'
+    + '<td style="padding:4px;"><input type="text" class="jt-slug" placeholder="slug (optional)" style="width:100%;padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);"></td>'
+    + '<td style="padding:4px;"><input type="number" min="0" class="jt-views" placeholder="0" style="width:100%;padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);"></td>'
+    + '<td style="padding:4px;"><input type="number" min="0" class="jt-clicks" placeholder="0" style="width:100%;padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);"></td>'
+    + '<td style="padding:4px;text-align:center;"><button class="btn-icon-sm" onclick="this.closest(\'tr\').remove()" title="Remove row">&#10005;</button></td>';
+  tbody.appendChild(row);
+}
+
+async function submitJobTable() {
+  var period = document.getElementById('jobtable-period').value.trim();
+  if (!period) { showToast('Period is required'); return; }
+
+  var rows = document.querySelectorAll('#jobTableBody tr');
+  var saved = 0;
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    var company = row.querySelector('.jt-company').value.trim();
+    var title   = row.querySelector('.jt-title').value.trim();
+    var slug    = row.querySelector('.jt-slug').value.trim();
+    var views   = row.querySelector('.jt-views').value;
+    var clicks  = row.querySelector('.jt-clicks').value;
+
+    // Skip fully empty rows
+    if (!company && !title && !views && !clicks) continue;
+    if (!company || !title) { showToast('Row ' + (i+1) + ': company and job title are required'); return; }
+
+    var entry = {
+      id: uid(), type: 'job', title: title, company: company,
+      jobSlug: slug || null, period: period,
+      jobViews: views || null, applyClicks: clicks || null,
+      note: '', by: currentRole === 'admin' ? 'Admin' : 'Team', ts: tsNow()
+    };
+    await saveClickEntry(entry);
+    saved++;
+  }
+
+  if (saved === 0) { showToast('No rows to save'); return; }
+
+  // Reset table
+  document.getElementById('jobTableBody').innerHTML = '';
+  document.getElementById('jobtable-period').value = '';
+  addJobTableRow(); addJobTableRow(); addJobTableRow();
+  renderAll();
+  showToast(saved + ' job posting' + (saved > 1 ? 's' : '') + ' saved!');
+}
+
+// ─── Company-level quarterly aggregate ──────────────────────
+async function submitCompanyTotal() {
+  var company = document.getElementById('co-company').value.trim();
+  var period  = document.getElementById('co-period').value.trim();
+  var views   = document.getElementById('co-views').value;
+  var clicks  = document.getElementById('co-clicks').value;
+  var note    = document.getElementById('co-note').value.trim();
+
+  if (!company || !period) { showToast('Company and period are required'); return; }
+  if (!views && !clicks) { showToast('Enter at least views or clicks'); return; }
+
+  var entry = {
+    id: uid(), type: 'job', title: 'Company total (all postings)', company: company,
+    jobSlug: null, period: period,
+    jobViews: views || null, applyClicks: clicks || null,
+    note: note || 'Combined total across all job postings for this company',
+    by: currentRole === 'admin' ? 'Admin' : 'Team', ts: tsNow()
+  };
+  await saveClickEntry(entry);
+
+  ['co-company','co-period','co-views','co-clicks','co-note'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+  renderAll();
+  showToast('Company total saved!');
 }
 
 function submitClickEntry(type) {
