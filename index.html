@@ -200,7 +200,7 @@ input, select, textarea { font-family: var(--font); }
 .pres-slide { width: 100%; aspect-ratio: 16/9; background: #fff; border: none; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; position: relative; box-shadow: 0 12px 48px rgba(0,0,0,0.45); }
 .pres-slide-head { background: var(--g); padding: .75rem 2rem; flex-shrink: 0; }
 .pres-slide-num { font-size: 10px; color: rgba(255,255,255,.65); margin-bottom: 2px; letter-spacing: .03em; }
-.pres-slide-title { font-size: 18px; font-weight: 700; color: #fff; letter-spacing: -.01em; }
+.pres-slide-title { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: -.02em; line-height: 1.2; }
 .pres-slide-body { padding: 1.75rem 2rem; flex: 1; min-height: 0; overflow: hidden; }
 .pres-pfield { padding: 10px 0; border-bottom: 1px solid #E5E7EB; }
 .pres-pfield:last-child { border-bottom: none; padding-bottom: 0; }
@@ -2595,29 +2595,29 @@ async function buildPresHTML(snapshot) {
       return '<div class="pres-slide-wrap"><div class="pres-slide" style="background:' + t.slideBg + ';border-color:' + t.border + ';display:flex;flex-direction:column;">'
         + '<div style="background:' + t.headerBg + ';padding:1rem 1.5rem;">'
         + '<div style="font-size:10px;color:' + t.meta + ';">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
-        + '<div style="font-size:18px;font-weight:600;color:' + t.headerText + ';">' + esc(s.title) + '</div>'
+        + '<div style="font-size:26px;font-weight:700;color:' + t.headerText + ';letter-spacing:-.01em;line-height:1.2;">' + esc(s.title) + '</div>'
         + (ev ? '<div style="font-size:12px;color:' + t.meta + ';margin-top:2px;">' + esc(ev.title || ev.company || '') + (dateStr !== '--' ? ' · ' + dateStr : '') + '</div>' : '')
         + '</div>'
-        + '<div style="padding:1.25rem;">'
-        + (evImgHTML ? '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">' + evImgHTML + '</div>' : '')
-        + (ev ? '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1rem;">'
-          + '<div style="background:' + t.border + ';border-radius:8px;padding:.75rem;text-align:center;">'
-          + '<div style="font-size:11px;color:' + t.fieldLabel + ';">Registrations</div>'
-          + '<div style="font-size:22px;font-weight:700;color:' + t.fieldValue + ';">' + regs.toLocaleString() + '</div>'
+        + '<div style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:space-evenly;padding:1.5rem 2rem;">'
+        + (evImgHTML ? '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:1rem;">' + evImgHTML + '</div>' : '')
+        + (ev ? '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem;">'
+          + '<div class="ev-stat-card" style="background:' + t.border + ';border-radius:10px;padding:1.25rem;text-align:center;">'
+          + '<div class="ev-stat-lbl" style="font-size:12px;font-weight:500;color:' + t.fieldLabel + ';margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.04em;">Registrations</div>'
+          + '<div class="ev-stat-val" style="font-size:36px;font-weight:700;color:' + t.fieldValue + ';line-height:1;">' + regs.toLocaleString() + '</div>'
           + '</div>'
-          + '<div style="background:' + t.border + ';border-radius:8px;padding:.75rem;text-align:center;">'
-          + '<div style="font-size:11px;color:' + t.fieldLabel + ';">Attendees</div>'
-          + '<div style="font-size:22px;font-weight:700;color:' + t.fieldValue + ';">' + att.toLocaleString() + '</div>'
+          + '<div class="ev-stat-card" style="background:' + t.border + ';border-radius:10px;padding:1.25rem;text-align:center;">'
+          + '<div class="ev-stat-lbl" style="font-size:12px;font-weight:500;color:' + t.fieldLabel + ';margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.04em;">Attendees</div>'
+          + '<div class="ev-stat-val" style="font-size:36px;font-weight:700;color:' + t.fieldValue + ';line-height:1;">' + att.toLocaleString() + '</div>'
           + '</div>'
-          + '<div style="background:' + t.border + ';border-radius:8px;padding:.75rem;text-align:center;">'
-          + '<div style="font-size:11px;color:' + t.fieldLabel + ';">Attendance rate</div>'
-          + '<div style="font-size:22px;font-weight:700;color:#1db954;">' + rate + '</div>'
+          + '<div class="ev-stat-card" style="background:' + t.border + ';border-radius:10px;padding:1.25rem;text-align:center;">'
+          + '<div class="ev-stat-lbl" style="font-size:12px;font-weight:500;color:' + t.fieldLabel + ';margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.04em;">Attendance rate</div>'
+          + '<div class="ev-stat-val" style="font-size:36px;font-weight:700;color:#1AA463;line-height:1;">' + rate + '</div>'
           + '</div>'
-          + (clicks2 ? '<div style="background:' + t.border + ';border-radius:8px;padding:.75rem;text-align:center;">'
-          + '<div style="font-size:11px;color:' + t.fieldLabel + ';">Apply clicks</div>'
-          + '<div style="font-size:22px;font-weight:700;color:' + t.fieldValue + ';">' + clicks2.toLocaleString() + '</div>'
+          + (clicks2 ? '<div class="ev-stat-card" style="background:' + t.border + ';border-radius:10px;padding:1.25rem;text-align:center;">'
+          + '<div class="ev-stat-lbl" style="font-size:12px;font-weight:500;color:' + t.fieldLabel + ';margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.04em;">Apply clicks</div>'
+          + '<div class="ev-stat-val" style="font-size:36px;font-weight:700;color:' + t.fieldValue + ';line-height:1;">' + clicks2.toLocaleString() + '</div>'
           + '</div>' : '')
-          + '</div>' : '<div style="font-size:13px;color:' + t.fieldLabel + ';font-style:italic;">No event selected. Go to Data entry and pick an event for this slide.</div>')
+          + '</div>' : '<div style="font-size:14px;color:' + t.fieldLabel + ';font-style:italic;">No event selected. Go to Data entry and pick an event.</div>')
         + s.fields.filter(function(f){ return !f.type.startsWith('ev_') && f.type !== 'image'; }).map(function(f) {
             var raw3 = e && e.data && e.data[f.id] ? e.data[f.id] : '';
             var isLive3 = f.type.startsWith('hs_') || f.type.startsWith('ac_');
@@ -2628,8 +2628,7 @@ async function buildPresHTML(snapshot) {
               + '</div>';
           }).join('')
         + (ev && ev.note ? '<div style="font-size:12px;color:' + t.fieldLabel + ';margin-top:.75rem;font-style:italic;">' + esc(ev.note) + '</div>' : '')
-        + '<div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid ' + t.border + ';font-size:10px;color:' + t.disclaimer + ';text-align:right;">Designed by Myra via Claude AI</div>'
-        + '</div>'
+        + '<div style="padding-top:.5rem;font-size:9px;color:' + t.disclaimer + ';text-align:right;">Designed by Myra via Claude AI</div>'
         + '</div>'
         + '</div>';
     }
@@ -2813,8 +2812,11 @@ function autoFitSlides() {
     // Apply starting size, then shrink if content overflows
     applySize(startPx);
     var attempts = 0;
-    while (body.scrollHeight > body.clientHeight + 4 && startPx > 12 && attempts < 20) {
+    while (body.scrollHeight > body.clientHeight + 8 && startPx > 12 && attempts < 25) {
       startPx -= 2;
+      // Recalculate padding too as we shrink
+      var pad2 = startPx >= 36 ? '1.2rem' : startPx >= 26 ? '.85rem' : startPx >= 18 ? '.55rem' : '.3rem';
+      fields.forEach(function(p) { p.style.padding = pad2 + ' 0'; });
       applySize(startPx);
       attempts++;
     }
