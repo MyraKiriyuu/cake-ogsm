@@ -573,7 +573,7 @@ async function saveEntry(entry) {
 }
 
 async function deleteEntry(id) {
-  if (!confirm('Delete this entry? This cannot be undone.')) return;
+  // Note: confirm() removed as it can be blocked in some browsers
   entries = entries.filter(function(e){ return e.id !== id; });
   lsSet('ogsm_entries', entries);
   if (CONFIGURED) {
@@ -805,9 +805,10 @@ async function saveClickEntry(entry) {
 }
 
 async function deleteClickEntry(id) {
-  if (!confirm('Delete this entry? This cannot be undone.')) return;
+  // Use inline toast confirmation instead of confirm() which can be blocked
   clickEntries = clickEntries.filter(function(e){ return e.id !== id; });
   lsSet('ogsm_clicks', clickEntries);
+  renderClicks();
   if (CONFIGURED) {
     try {
       const hdrs = await getAuthHeaders();
@@ -819,12 +820,13 @@ async function deleteClickEntry(id) {
         const txt = await res.text();
         console.error('Click delete failed:', res.status, txt);
         showToast('Delete failed: ' + res.status);
-        return;
+      } else {
+        showToast('Entry deleted');
       }
-    } catch(e) { console.error('Click delete error:', e); showToast('Delete error'); return; }
+    } catch(e) { console.error('Click delete error:', e); showToast('Delete error'); }
+  } else {
+    showToast('Entry deleted');
   }
-  renderClicks();
-  showToast('Entry deleted');
 }
 
 function goTo(id, el) {
