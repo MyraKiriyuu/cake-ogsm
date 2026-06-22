@@ -186,26 +186,27 @@ input, select, textarea { font-family: var(--font); }
 .hist-field-value { font-size: 13px; font-weight: 500; color: var(--ink); }
 
 /* ─── PRESENTATION ───────────────────────────────────────── */
-.pres-overlay { position: fixed; inset: 0; z-index: 200; background: #0d0d0c; display: none; flex-direction: column; }
+.pres-overlay { position: fixed; inset: 0; z-index: 200; background: #0F3B2E; display: none; flex-direction: column; }
 .pres-overlay.show { display: flex; }
-.pres-bar { background: #181816; border-bottom: 1px solid #2a2a28; padding: 0 1.5rem; height: 52px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.pres-bar { background: #0F3B2E; border-bottom: 1px solid rgba(255,255,255,.12); padding: 0 1.5rem; height: 52px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
 .pres-bar-title { font-size: 13px; font-weight: 500; color: #c0c0bc; }
 .pres-bar-right { display: flex; gap: 8px; }
 .pres-btn { padding: 6px 14px; font-size: 12px; font-weight: 500; border-radius: 7px; border: 1px solid #3a3a38; background: transparent; color: #c0c0bc; cursor: pointer; }
 .pres-btn:hover { background: #2a2a28; }
 .pres-btn-green { background: var(--g); color: #fff; border-color: var(--g); }
 .pres-btn-green:hover { background: var(--g-dark); }
-.pres-scroll { flex: 1; overflow-y: auto; padding: 1.5rem; }
-.pres-slide { max-width: 100%; width: 100%; margin: 0 0 1.5rem; background: #1a1a18; border: 1px solid #2a2a28; border-radius: 12px; overflow: hidden; }
-.pres-slide-head { background: var(--g); padding: 1.25rem 1.5rem; }
-.pres-slide-num { font-size: 11px; color: rgba(255,255,255,.6); margin-bottom: 3px; }
-.pres-slide-title { font-size: 20px; font-weight: 600; color: #fff; }
-.pres-slide-body { padding: 1.5rem; }
-.pres-pfield { padding: 10px 0; border-bottom: 1px solid #2a2a28; }
+.pres-scroll { flex: 1; overflow-y: auto; padding: 2.5rem 1.5rem; background: #0F3B2E; }
+.pres-slide-wrap { width: 1280px; max-width: calc(100vw - 3rem); margin: 0 auto 2rem; }
+.pres-slide { width: 100%; aspect-ratio: 16/9; background: #fff; border: none; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; position: relative; box-shadow: 0 8px 32px rgba(0,0,0,0.35); }
+.pres-slide-head { background: var(--g); padding: .75rem 2rem; flex-shrink: 0; }
+.pres-slide-num { font-size: 10px; color: rgba(255,255,255,.65); margin-bottom: 2px; letter-spacing: .03em; }
+.pres-slide-title { font-size: 18px; font-weight: 700; color: #fff; letter-spacing: -.01em; }
+.pres-slide-body { padding: 1.75rem 2rem; flex: 1; min-height: 0; overflow-y: auto; }
+.pres-pfield { padding: 10px 0; border-bottom: 1px solid #E5E7EB; }
 .pres-pfield:last-child { border-bottom: none; padding-bottom: 0; }
-.pres-pfield-label { font-size: 11px; color: #6a6a68; margin-bottom: 3px; }
-.pres-pfield-value { font-size: 16px; font-weight: 500; color: #f0f0ee; }
-.pres-pfield-empty { font-size: 13px; color: #3a3a38; font-style: italic; }
+.pres-pfield-label { font-size: 11px; color: #8A8A8A; margin-bottom: 3px; font-weight: 500; letter-spacing: .02em; text-transform: uppercase; }
+.pres-pfield-value { font-size: 16px; font-weight: 600; color: #1F2A24; }
+.pres-pfield-empty { font-size: 13px; color: #8A8A8A; font-style: italic; }
 .pres-slide-meta { font-size: 10px; color: #4a4a48; margin-top: 12px; font-family: var(--mono); }
 
 /* ─── UTILS ──────────────────────────────────────────────── */
@@ -689,7 +690,7 @@ function buildPages() {
 let globalTheme = lsGet('ogsm_global_theme') || 'light';
 
 const THEMES = {
-  light: { slideBg:'#ffffff', slideText:'#0f0f0f', headerBg:'#1db954', headerText:'#ffffff', fieldLabel:'#888888', fieldValue:'#0f0f0f', border:'#e5e5e3', meta:'#aaaaaa', disclaimer:'rgba(0,0,0,.2)' },
+  light: { slideBg:'#ffffff', slideText:'#1F2A24', headerBg:'#1AA463', headerText:'#ffffff', fieldLabel:'#8A8A8A', fieldValue:'#1F2A24', border:'#E5E7EB', meta:'#8A8A8A', disclaimer:'rgba(0,0,0,.18)' },
   dark:  { slideBg:'#1a1a18', slideText:'#f0f0ee', headerBg:'#111110', headerText:'#f0f0ee', fieldLabel:'#6a6a68', fieldValue:'#f0f0ee', border:'#2a2a28', meta:'#4a4a48', disclaimer:'rgba(255,255,255,.2)' },
   cake:  { slideBg:'#1db954', slideText:'#ffffff',  headerBg:'#0f6e34', headerText:'#ffffff', fieldLabel:'rgba(255,255,255,.65)', fieldValue:'#ffffff', border:'rgba(255,255,255,.2)', meta:'rgba(255,255,255,.4)', disclaimer:'rgba(255,255,255,.3)' },
 };
@@ -2497,7 +2498,7 @@ async function buildPresHTML(snapshot) {
           + '</div>';
       }).join('');
 
-      return '<div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '" style="min-height:300px;">'
+      return '<div class="pres-slide-wrap"><div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '" style="min-height:0;">'
         + '<div style="background:var(--g);padding:3.5rem 2.5rem;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:300px;">'
         + '<div style="font-size:10px;color:rgba(255,255,255,.55);letter-spacing:.1em;text-transform:uppercase;margin-bottom:1rem;">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
         + imageHTML
@@ -2544,7 +2545,7 @@ async function buildPresHTML(snapshot) {
         evImgHTML += urls2.map(function(url){ return '<img src="' + url + '" style="max-height:180px;max-width:' + (urls2.length === 1 ? '100%' : '280px') + ';border-radius:8px;object-fit:contain;flex:1;min-width:120px;display:block;margin:0 auto;" onerror="this.hidden=true">'; }).join('');
       });
 
-      return '<div class="pres-slide" style="background:' + t.slideBg + ';border-color:' + t.border + ';">'
+      return '<div class="pres-slide-wrap"><div class="pres-slide" style="background:' + t.slideBg + ';border-color:' + t.border + ';display:flex;flex-direction:column;">'
         + '<div style="background:' + t.headerBg + ';padding:1rem 1.5rem;">'
         + '<div style="font-size:10px;color:' + t.meta + ';">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
         + '<div style="font-size:18px;font-weight:600;color:' + t.headerText + ';">' + esc(s.title) + '</div>'
@@ -2586,7 +2587,7 @@ async function buildPresHTML(snapshot) {
     }
 
     // -- Data slide layout (default) ---------------------------
-    return '<div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '" style="background:' + t.slideBg + ';border-color:' + t.border + ';">'
+    return '<div class="pres-slide-wrap"><div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '" style="background:' + t.slideBg + ';border-color:' + t.border + ';">'
       + '<div class="pres-slide-head" style="background:' + t.headerBg + ';">'
       + '<div class="pres-slide-num" style="color:' + t.meta + '">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
       + '<div class="pres-slide-title" style="color:' + t.headerText + '">' + esc(s.title) + '</div>'
