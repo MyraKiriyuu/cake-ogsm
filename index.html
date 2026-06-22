@@ -196,8 +196,8 @@ input, select, textarea { font-family: var(--font); }
 .pres-btn-green { background: var(--g); color: #fff; border-color: var(--g); }
 .pres-btn-green:hover { background: var(--g-dark); }
 .pres-scroll { flex: 1; overflow-y: auto; padding: 2.5rem 1.5rem; background: #0F3B2E; }
-.pres-slide-wrap { width: 1280px; max-width: calc(100vw - 3rem); margin: 0 auto 2rem; }
-.pres-slide { width: 100%; aspect-ratio: 16/9; background: #fff; border: none; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; position: relative; box-shadow: 0 8px 32px rgba(0,0,0,0.35); }
+.pres-slide-wrap { width: 1280px; max-width: calc(100vw - 4rem); margin: 0 auto 3rem; display: block; }
+.pres-slide { width: 100%; aspect-ratio: 16/9; background: #fff; border: none; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; position: relative; box-shadow: 0 12px 48px rgba(0,0,0,0.45); }
 .pres-slide-head { background: var(--g); padding: .75rem 2rem; flex-shrink: 0; }
 .pres-slide-num { font-size: 10px; color: rgba(255,255,255,.65); margin-bottom: 2px; letter-spacing: .03em; }
 .pres-slide-title { font-size: 18px; font-weight: 700; color: #fff; letter-spacing: -.01em; }
@@ -805,15 +805,23 @@ async function saveClickEntry(entry) {
 }
 
 async function deleteClickEntry(id) {
-  clickEntries = clickEntries.filter(e => e.id !== id);
+  if (!confirm('Delete this entry? This cannot be undone.')) return;
+  clickEntries = clickEntries.filter(function(e){ return e.id !== id; });
   lsSet('ogsm_clicks', clickEntries);
   if (CONFIGURED) {
     try {
-      const headers = await getAuthHeaders();
-      await fetch(`${SUPABASE_URL}/rest/v1/apply_clicks?id=eq.${id}`, {
-        method: 'DELETE', headers
+      const hdrs = await getAuthHeaders();
+      const res = await fetch(SUPABASE_URL + '/rest/v1/apply_clicks?id=eq.' + encodeURIComponent(id), {
+        method: 'DELETE',
+        headers: Object.assign({}, hdrs, { 'Prefer': 'return=minimal' })
       });
-    } catch(e) { console.error('Click delete error:', e); }
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error('Click delete failed:', res.status, txt);
+        showToast('Delete failed: ' + res.status);
+        return;
+      }
+    } catch(e) { console.error('Click delete error:', e); showToast('Delete error'); return; }
   }
   renderClicks();
   showToast('Entry deleted');
@@ -2549,6 +2557,7 @@ async function buildPresHTML(snapshot) {
           }).join('') + '</div>' : '')
         + '<div style="margin-top:2.5rem;font-size:10px;color:rgba(255,255,255,.3);">Designed by Myra via Claude AI</div>'
         + '</div>'
+        + '</div>'
         + '</div>';
     }
 
@@ -2621,6 +2630,7 @@ async function buildPresHTML(snapshot) {
         + (ev && ev.note ? '<div style="font-size:12px;color:' + t.fieldLabel + ';margin-top:.75rem;font-style:italic;">' + esc(ev.note) + '</div>' : '')
         + '<div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid ' + t.border + ';font-size:10px;color:' + t.disclaimer + ';text-align:right;">Designed by Myra via Claude AI</div>'
         + '</div>'
+        + '</div>'
         + '</div>';
     }
 
@@ -2673,6 +2683,7 @@ async function buildPresHTML(snapshot) {
       + (!e && !hasLiveFields ? '<div class="pres-pfield-empty">No data entered yet.</div>' : '')
       + (e ? '<div class="pres-slide-meta" style="margin-top:12px;color:' + t.meta + ';">Updated ' + fmtTs(e.ts || e.created_at) + ' · ' + esc(e.by) + '</div>' : '')
       + disclaimer
+      + '</div>'
       + '</div>'
       + '</div>';
   }).join('');
@@ -2741,10 +2752,61 @@ async function loadAndRenderPres() {
 
     if (scroll) { scroll.innerHTML = html; scroll.scrollTop = scrollPos; }
     setupPeriodBarVisibility();
+    setTimeout(autoFitSlides, 120);
   } catch(err) {
     console.error('Presentation error:', err);
     if (scroll) scroll.innerHTML = '<div style="text-align:center;padding:3rem;color:#e24b4a;">Error: ' + err.message + '</div>';
   }
+}
+
+// ─── Auto-fit font sizes to fill slide ───────────────────────
+function autoFitSlides() {
+  document.querySelectorAll('.pres-slide').forEach(function(slide) {
+    var body = slide.querySelector('.pres-col-wrap, .pres-slide-body');
+    if (!body) return;
+    var values = slide.querySelectorAll('.pres-pfield-value');
+    var fields = slide.querySelectorAll('.pres-pfield');
+    if (!values.length) return;
+
+    var bodyH    = body.clientHeight || (slide.clientHeight * 0.80);
+    var availH   = bodyH * 0.78;
+    var fc       = Math.max(fields.length || values.length, 1);
+    var perField = availH / fc;
+    var valPx    = Math.max(14, Math.min(96, Math.round(perField * 0.52)));
+    var lblPx    = Math.max(10, Math.min(28, Math.round(perField * 0.18)));
+    var padStr   = fc <= 2 ? '1.4rem' : fc <= 3 ? '1rem' : fc <= 5 ? '.65rem' : '.4rem';
+
+    values.forEach(function(v) {
+      var childSpans = v.querySelectorAll('span, div');
+      if (!childSpans.length) {
+        v.style.fontSize   = valPx + 'px';
+        v.style.lineHeight = '1.1';
+        v.style.fontWeight = '700';
+      } else {
+        var scale = valPx / 16;
+        childSpans.forEach(function(sp) {
+          var cur = parseFloat(sp.style.fontSize || '14');
+          sp.style.fontSize = Math.max(10, Math.min(32, Math.round(cur * scale))) + 'px';
+        });
+      }
+    });
+    slide.querySelectorAll('.pres-pfield-label').forEach(function(l) {
+      l.style.fontSize = lblPx + 'px';
+    });
+    slide.querySelectorAll('.pres-pfield').forEach(function(p) {
+      p.style.padding = padStr + ' 0';
+    });
+
+    // Event stat cards
+    var statVals = slide.querySelectorAll('.ev-stat-val');
+    var statLbls = slide.querySelectorAll('.ev-stat-lbl');
+    if (statVals.length) {
+      var sPx = Math.max(18, Math.min(100, Math.round(availH / Math.max(statVals.length, 1) * 0.58)));
+      var lPx = Math.max(10, Math.min(24, Math.round(sPx * 0.25)));
+      statVals.forEach(function(v) { v.style.fontSize = sPx + 'px'; v.style.lineHeight = '1.1'; });
+      statLbls.forEach(function(l) { l.style.fontSize = lPx + 'px'; });
+    }
+  });
 }
 
 async function openPresentation() {
@@ -2759,6 +2821,7 @@ async function openPresentation() {
     hsPeriodMode = savedMode; hsPeriodVal = savedVal; hsYear = savedYear;
     document.getElementById('presContent').innerHTML = html;
     setupPeriodBarVisibility();
+    setTimeout(autoFitSlides, 120);
   } catch(err) {
     console.error('Presentation error:', err);
     document.getElementById('presContent').innerHTML = '<div style="text-align:center;padding:3rem;color:#e24b4a;">Error: ' + err.message + '</div>';
