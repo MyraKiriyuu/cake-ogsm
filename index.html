@@ -535,6 +535,27 @@ async function saveSlide(s) {
   }
 }
 
+async function deleteSlide(id) {
+  if (!confirm('Delete this slide and all its entries? This cannot be undone.')) return;
+  slides  = slides.filter(function(s){ return s.id !== id; });
+  entries = entries.filter(function(e){ return (e.slideId||e.slide_id) !== id; });
+  lsSet('ogsm_slides', slides);
+  lsSet('ogsm_entries', entries);
+  if (CONFIGURED) {
+    try {
+      const headers = await getAuthHeaders();
+      await fetch(`${SUPABASE_URL}/rest/v1/slides?id=eq.${id}`, {
+        method: 'DELETE', headers: { ...headers, 'Prefer': 'return=minimal' }
+      });
+      await fetch(`${SUPABASE_URL}/rest/v1/entries?slide_id=eq.${id}`, {
+        method: 'DELETE', headers: { ...headers, 'Prefer': 'return=minimal' }
+      });
+    } catch(err) { console.error('Delete slide error:', err); }
+  }
+  renderAll();
+  showToast('Slide deleted');
+}
+
 async function deleteSlideDB(id) {
   if (CONFIGURED) await _supabase.from('slides').delete().eq('id', id);
   else { lsSet('ogsm_slides', slides); lsSet('ogsm_entries', entries); }
@@ -549,6 +570,23 @@ async function saveEntry(entry) {
   } else {
     lsSet('ogsm_entries', entries);
   }
+}
+
+async function deleteEntry(id) {
+  if (!confirm('Delete this entry? This cannot be undone.')) return;
+  entries = entries.filter(function(e){ return e.id !== id; });
+  lsSet('ogsm_entries', entries);
+  if (CONFIGURED) {
+    try {
+      const headers = await getAuthHeaders();
+      await fetch(`${SUPABASE_URL}/rest/v1/entries?id=eq.${id}`, {
+        method: 'DELETE',
+        headers: { ...headers, 'Prefer': 'return=minimal' }
+      });
+    } catch(err) { console.error('Delete entry error:', err); }
+  }
+  renderAll();
+  showToast('Entry deleted');
 }
 
 async function deleteEntryDB(id) {
