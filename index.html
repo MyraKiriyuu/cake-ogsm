@@ -1042,7 +1042,7 @@ function renderClickItem(e) {
     + '<div style="font-size:11px;color:var(--ink2);">' + esc(company) + (slug ? ' · <span style="font-family:var(--mono);font-size:10px;">' + esc(slug) + '</span>' : '') + '</div>'
     + '<div class="hist-ts">' + fmtTs(ts) + ' · by ' + esc(by) + (note ? ' · ' + esc(note) : '') + '</div>'
     + '</div>'
-    + (currentRole === 'admin' ? '<button class="btn btn-sm btn-danger" onclick="deleteClickEntry(' + JSON.stringify(e.id || '') + ')">Delete</button>' : '')
+    + (currentRole === 'admin' ? '<button class="btn btn-sm btn-danger" onclick="deleteClickEntry(\'' + (e.id || '') + '\')">Delete</button>' : '')
     + '</div>'
     + '<div class="hist-fields" style="margin-top:8px;">'
     + '<div class="hist-field"><div class="hist-field-label">Period</div><div class="hist-field-value">' + esc(period) + '</div></div>'
