@@ -869,6 +869,8 @@ function renderClicks() {
   // Top companies by clicks
   const byCompany = {};
   clickEntries.forEach(e => {
+    // Only count job postings, not events
+    if ((e.entry_type || e.type) === 'event') return;
     const co = e.company || 'Unknown';
     byCompany[co] = (byCompany[co] || 0) + (parseInt(e.apply_clicks || e.applyClicks) || 0);
   });
@@ -2434,11 +2436,14 @@ function resolveLiveField(type, live, snapshot, ctx) {
   if (type === 'hs_top_clients') {
     if (!hs.top_clients || !hs.top_clients.length) return 'No clients yet';
     if (snapshot) return hs.top_clients.map(function(c,i){return (i+1)+'. '+c.name+' ('+fmtUSD(c.amount_usd)+')';}).join(' | ');
+    var tcCount = hs.top_clients.length;
+    var tcValPx = Math.max(13, Math.min(22, Math.round(200 / Math.max(tcCount, 1))));
+    var tcLblPx = Math.max(10, Math.min(14, Math.round(tcValPx * 0.65)));
+    var tcPad = tcCount <= 3 ? '8px 0' : '5px 0';
     return hs.top_clients.map(function(c,i) {
-      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.1);">'
-        + '<span style="font-size:11px;font-weight:600;color:rgba(255,255,255,.6);width:16px;">' + (i+1) + '</span>'
-        + '<span style="flex:1;font-size:13px;">' + esc(c.name) + '</span>'
-        + '<span style="font-size:13px;font-weight:600;">' + fmtUSD(c.amount_usd) + '</span>'
+      return '<div class="tc-row" style="display:flex;align-items:center;gap:8px;padding:' + tcPad + ';border-bottom:1px solid rgba(0,0,0,.08);">'
+        + '<span class="tc-name" style="flex:1;font-size:' + tcValPx + 'px;font-weight:500;color:#1F2A24;">' + esc(c.name) + '</span>'
+        + '<span class="tc-amt" style="font-size:' + tcValPx + 'px;font-weight:700;color:var(--ink);">' + fmtUSD(c.amount_usd) + '</span>'
         + '</div>';
     }).join('');
   }
