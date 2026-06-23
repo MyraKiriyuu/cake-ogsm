@@ -315,7 +315,7 @@ input, select, textarea { font-family: var(--font); }
         <div class="topbar-role" id="roleLabel">Admin</div>
       </div>
       <div class="topbar-right">
-        <button class="btn-tbar btn-tbar-ghost" onclick="openPresentation()">▶ Present</button>
+        <button class="btn-tbar btn-tbar-ghost" onclick="_liveCache=null;openPresentation()">▶ Present</button>
         <button class="btn-tbar btn-tbar-solid" onclick="exportHTML()">↓ Export</button>
         <button class="btn-tbar btn-tbar-ghost" onclick="logout()">Sign out</button>
       </div>
@@ -2851,6 +2851,7 @@ function autoFitSlides() {
 }
 
 async function openPresentation() {
+  _liveCache = null;
   document.getElementById('presContent').innerHTML = '<div style="text-align:center;padding:3rem;color:#aaa;">Loading live data...</div>';
   document.getElementById('presOverlay').classList.add('show');
   buildPresSelectors();
