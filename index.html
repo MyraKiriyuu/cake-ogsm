@@ -2401,6 +2401,7 @@ async function resolveLiveData() {
   const totalClicks = clickEntries.reduce(function(s,e) { return s + (parseInt(e.apply_clicks || e.applyClicks) || 0); }, 0);
   const byCompany = {};
   clickEntries.forEach(function(e) {
+    if ((e.entry_type || e.type) === 'event') return; // exclude events
     const co = e.company || 'Unknown';
     byCompany[co] = (byCompany[co] || 0) + (parseInt(e.apply_clicks || e.applyClicks) || 0);
   });
@@ -2421,7 +2422,8 @@ async function resolveLiveData() {
   return _liveCache;
 }
 
-function resolveLiveField(type, live, snapshot, ctx) {
+function resolveLiveField(type, live, snapshot, ctx, fieldCount, theme) {
+  var th = theme || { fieldValue: "#1F2A24", fieldLabel: "#8A8A8A", border: "#E5E7EB" };
   const hs = live ? live.hs : null;
   if (!hs && type.startsWith('hs_')) return snapshot ? '[No HubSpot data]' : '<span style="color:#aaa;font-style:italic;">No HubSpot data for this period</span>';
 
@@ -2441,10 +2443,10 @@ function resolveLiveField(type, live, snapshot, ctx) {
     var tcLblPx = Math.max(10, Math.min(14, Math.round(tcValPx * 0.65)));
     var tcPad = tcCount <= 3 ? '8px 0' : '5px 0';
     return hs.top_clients.map(function(c,i) {
-      return '<div class="tc-row" style="display:flex;align-items:center;gap:8px;padding:' + tcPad + ';border-bottom:1px solid rgba(0,0,0,.08);">'
-        + '<span class="tc-name" style="flex:1;font-size:' + tcValPx + 'px;font-weight:500;color:#1F2A24;">' + esc(c.name) + '</span>'
-        + '<span class="tc-amt" style="font-size:' + tcValPx + 'px;font-weight:700;color:var(--ink);">' + fmtUSD(c.amount_usd) + '</span>'
-        + '</div>';
+      return '<div class="tc-row" style="display:flex;align-items:center;gap:8px;padding:' + tcPad + ';border-bottom:1px solid ' + th.border + ';">' 
+        + '<span class="tc-num" style="font-size:' + tcLblPx + 'px;font-weight:700;color:#1AA463;width:20px;flex-shrink:0;">' + (i+1) + '</span>' 
+        + '<span class="tc-name" style="flex:1;font-size:' + tcValPx + 'px;font-weight:500;color:' + th.fieldValue + ';">' + esc(c.name) + '</span>' 
+        + '<span class="tc-amt" style="font-size:' + tcValPx + 'px;font-weight:700;color:' + th.fieldValue + ';">' + fmtUSD(c.amount_usd) + '</span>' 
     }).join('');
   }
   // Mandarin niche fields
@@ -2564,7 +2566,7 @@ async function buildPresHTML(snapshot) {
         + (subtitleVal ? '<div style="font-size:22px;color:rgba(255,255,255,.8);margin-bottom:.5rem;">' + esc(subtitleVal) + '</div>' : '')
         + (detailFields.length && e ? '<div style="margin-top:1rem;">' + detailFields.map(function(f) {
             const isLive = f.type.startsWith('hs_') || f.type.startsWith('ac_');
-            const val = isLive ? resolveLiveField(f.type, live, snapshot) : esc(e && e.data && e.data[f.id] ? e.data[f.id] : '');
+            const val = isLive ? resolveLiveField(f.type, live, snapshot, null, null, t) : esc(e && e.data && e.data[f.id] ? e.data[f.id] : '');
             return val ? '<div style="font-size:13px;color:rgba(255,255,255,.75);margin-top:6px;">' + esc(f.label) + ': ' + val + '</div>' : '';
           }).join('') + '</div>' : '')
         + '<div style="margin-top:2.5rem;font-size:10px;color:rgba(255,255,255,.3);">Designed by Myra via Claude AI</div>'
