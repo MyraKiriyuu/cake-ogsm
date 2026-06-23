@@ -2396,6 +2396,8 @@ async function clearAll() {
 let _liveCache = null;
 
 async function resolveLiveData() {
+  // Always bust cache - ensures byCompany filter is fresh
+  _liveCache = null;
   if (_liveCache) return _liveCache;
   const hs = await loadHubSpotForPeriod();
   const totalClicks = clickEntries.reduce(function(s,e) { return s + (parseInt(e.apply_clicks || e.applyClicks) || 0); }, 0);
@@ -2643,6 +2645,7 @@ async function buildPresHTML(snapshot) {
           }).join('')
         + (ev && ev.note ? '<div style="font-size:12px;color:' + t.fieldLabel + ';margin-top:.75rem;font-style:italic;">' + esc(ev.note) + '</div>' : '')
         + '<div style="padding-top:.5rem;font-size:9px;color:' + t.disclaimer + ';text-align:right;">Designed by Myra via Claude AI</div>'
+        + '</div>'
         + '</div>'
         + '</div>';
     }
