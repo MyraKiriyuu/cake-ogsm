@@ -2449,7 +2449,8 @@ function resolveLiveField(type, live, snapshot, ctx, fieldCount, theme) {
       return '<div class="tc-row" style="display:flex;align-items:center;gap:8px;padding:' + tcPad + ';border-bottom:1px solid ' + th.border + ';">' 
         + '<span class="tc-num" style="font-size:' + tcLblPx + 'px;font-weight:700;color:#1AA463;width:20px;flex-shrink:0;">' + (i+1) + '</span>' 
         + '<span class="tc-name" style="flex:1;font-size:' + tcValPx + 'px;font-weight:500;color:' + th.fieldValue + ';">' + esc(c.name) + '</span>' 
-        + '<span class="tc-amt" style="font-size:' + tcValPx + 'px;font-weight:700;color:' + th.fieldValue + ';">' + fmtUSD(c.amount_usd) + '</span>' 
+        + '<span class="tc-amt" style="font-size:' + tcValPx + 'px;font-weight:700;color:' + th.fieldValue + ';">' + fmtUSD(c.amount_usd) + '</span>'
+        + '</div>';
     }).join('');
   }
   // Mandarin niche fields
