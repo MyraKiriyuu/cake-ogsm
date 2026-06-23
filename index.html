@@ -197,7 +197,8 @@ input, select, textarea { font-family: var(--font); }
 .pres-btn-green:hover { background: var(--g-dark); }
 .pres-scroll { flex: 1; overflow-y: auto; padding: 2.5rem 1.5rem; background: #0F3B2E; }
 .pres-slide-wrap { width: 1280px; max-width: calc(100vw - 4rem); margin: 0 auto 3rem; display: block; }
-.pres-slide { width: 100%; aspect-ratio: 16/9; background: #fff; border: none; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; position: relative; box-shadow: 0 12px 48px rgba(0,0,0,0.45); }
+.pres-slide { width: 100%; height: 0; padding-bottom: 56.25%; background: #fff; border: none; border-radius: 6px; overflow: hidden; position: relative; box-shadow: 0 12px 48px rgba(0,0,0,0.45); }
+.pres-slide-inner { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden; }
 .pres-slide-head { background: var(--g); padding: .75rem 2rem; flex-shrink: 0; }
 .pres-slide-num { font-size: 10px; color: rgba(255,255,255,.65); margin-bottom: 2px; letter-spacing: .03em; }
 .pres-slide-title { font-size: 32px; font-weight: 700; color: #fff; letter-spacing: -.02em; line-height: 1.2; }
@@ -2560,7 +2561,7 @@ async function buildPresHTML(snapshot) {
           + '</div>';
       }).join('');
 
-      return '<div class="pres-slide-wrap"><div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '" style="min-height:0;">'
+      return '<div class="pres-slide-wrap"><div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '" style="min-height:0;">' + '<div class="pres-slide-inner">'
         + '<div style="background:var(--g);padding:2rem 2.5rem;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;flex:1;min-height:0;overflow:hidden;">'
         + '<div style="font-size:10px;color:rgba(255,255,255,.55);letter-spacing:.1em;text-transform:uppercase;margin-bottom:1rem;">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
         + imageHTML
@@ -2572,6 +2573,7 @@ async function buildPresHTML(snapshot) {
             return val ? '<div style="font-size:13px;color:rgba(255,255,255,.75);margin-top:6px;">' + esc(f.label) + ': ' + val + '</div>' : '';
           }).join('') + '</div>' : '')
         + '<div style="margin-top:2.5rem;font-size:10px;color:rgba(255,255,255,.3);">Designed by Myra via Claude AI</div>'
+        + '</div>'
         + '</div>'
         + '</div>'
         + '</div>';
@@ -2608,7 +2610,7 @@ async function buildPresHTML(snapshot) {
         evImgHTML += urls2.map(function(url){ return '<img src="' + url + '" style="max-height:180px;max-width:' + (urls2.length === 1 ? '100%' : '280px') + ';border-radius:8px;object-fit:contain;flex:1;min-width:120px;display:block;margin:0 auto;" onerror="this.hidden=true">'; }).join('');
       });
 
-      return '<div class="pres-slide-wrap"><div class="pres-slide" style="background:' + t.slideBg + ';border-color:' + t.border + ';display:flex;flex-direction:column;">'
+      return '<div class="pres-slide-wrap"><div class="pres-slide" style="background:' + t.slideBg + ';border-color:' + t.border + ';display:flex;flex-direction:column;">' + '<div class="pres-slide-inner">'
         + '<div style="background:' + t.headerBg + ';padding:1rem 1.5rem;">'
         + '<div style="font-size:10px;color:' + t.meta + ';">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
         + '<div style="font-size:26px;font-weight:700;color:' + t.headerText + ';letter-spacing:-.01em;line-height:1.2;">' + esc(s.title) + '</div>'
@@ -2648,10 +2650,11 @@ async function buildPresHTML(snapshot) {
         + '</div>'
         + '</div>'
         + '</div>';
+        + '</div>'
     }
 
     // -- Data slide layout (default) ---------------------------
-    return '<div class="pres-slide-wrap"><div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '" style="background:' + t.slideBg + ';border-color:' + t.border + ';">'
+    return '<div class="pres-slide-wrap"><div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '" style="background:' + t.slideBg + ';border-color:' + t.border + ';">' + '<div class="pres-slide-inner">'
       + '<div class="pres-slide-head" style="background:' + t.headerBg + ';">'
       + '<div class="pres-slide-num" style="color:' + t.meta + '">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
       + '<div class="pres-slide-title" style="color:' + t.headerText + '">' + esc(s.title) + '</div>'
@@ -2703,6 +2706,7 @@ async function buildPresHTML(snapshot) {
       + '</div>'
       + '</div>';
   }).join('');
+      + '</div>'
 }
 
 // ─── Presentation period state (independent from dashboard) ───
