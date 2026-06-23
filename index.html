@@ -2798,7 +2798,7 @@ function autoFitSlides() {
     fields.forEach(function(p) { p.style.padding = padStr + ' 0'; });
 
     // Set initial size based on available space per field
-    var startPx = Math.min(48, Math.round((bodyH * 0.75) / fc * 0.52));
+    var startPx = Math.min(32, Math.round((bodyH * 0.75) / fc * 0.52));
     startPx = Math.max(14, startPx);
 
     function applySize(px) {
