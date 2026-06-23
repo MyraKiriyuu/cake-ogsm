@@ -1342,6 +1342,32 @@ async function getAuthHeaders() {
   return headers;
 }
 
+async function triggerHubSpotSync(btn) {
+  if (!CONFIGURED) { showToast('Supabase not configured'); return; }
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Syncing…';
+  try {
+    const headers = await getAuthHeaders();
+    headers['Content-Type'] = 'application/json';
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/trigger-hubspot-sync`, {
+      method: 'POST', headers
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast('Sync started — data will update in ~30 seconds');
+      setTimeout(async () => { await renderDashboard(); }, 35000);
+    } else {
+      showToast('Sync failed: ' + (data.error || res.status));
+    }
+  } catch (err) {
+    showToast('Sync error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
 async function loadHubSpotDeals(filters) {
   if (!CONFIGURED) return [];
   try {
@@ -1616,6 +1642,7 @@ async function renderDashboard() {
         <div style="font-size:14px;font-weight:600;color:#fff;">HubSpot · ${esc(hs.quarter)}</div>
         <div style="display:flex;align-items:center;gap:10px;">
           ${buildPeriodSelector()}
+          ${currentRole === 'admin' ? `<button onclick="triggerHubSpotSync(this)" style="padding:5px 12px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.15);color:#fff;cursor:pointer;">↻ Sync now</button>` : ''}
         </div>
       </div>
       <div style="padding:1.25rem;">
@@ -1653,8 +1680,11 @@ async function renderDashboard() {
     hsPanel.innerHTML = `
     <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.5rem;">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">
-        <div style="font-size:13px;color:var(--ink3);">No HubSpot data yet. Run the sync workflow first.</div>
-        ${buildPeriodSelector()}
+        <div style="font-size:13px;color:var(--ink3);">No HubSpot data yet.</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          ${buildPeriodSelector()}
+          ${currentRole === 'admin' ? `<button onclick="triggerHubSpotSync(this)" style="padding:5px 12px;font-size:11px;font-weight:600;border-radius:6px;border:1px solid var(--border);background:var(--g);color:#fff;cursor:pointer;">↻ Sync now</button>` : ''}
+        </div>
       </div>
     </div>`;
   }
