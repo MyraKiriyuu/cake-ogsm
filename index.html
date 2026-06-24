@@ -2494,11 +2494,15 @@ function resolveLiveField(type, live, snapshot, ctx, fieldCount, theme) {
   if (type === 'ac_top_companies') {
     if (!live.topCo || !live.topCo.length) return 'No data yet';
     if (snapshot) return live.topCo.map(function(c,i){return (i+1)+'. '+c[0]+' ('+c[1].toLocaleString()+')';}).join(' | ');
-    return live.topCo.map(function(c,i) {
-      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">'
-        + '<span style="font-size:11px;font-weight:600;color:rgba(255,255,255,.6);width:16px;">' + (i+1) + '</span>'
-        + '<span style="flex:1;font-size:13px;">' + esc(c[0]) + '</span>'
-        + '<span style="font-size:13px;font-weight:600;">' + c[1].toLocaleString() + '</span>'
+    var maxCo = live.topCo[0][1] || 1;
+    return live.topCo.map(function(c) {
+      var pct = Math.round(c[1] / maxCo * 100);
+      return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;">'
+        + '<div style="width:130px;font-size:12px;color:' + th.fieldValue + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + esc(c[0]) + '">' + esc(c[0]) + '</div>'
+        + '<div style="flex:1;height:8px;background:' + th.border + ';border-radius:99px;overflow:hidden;">'
+        + '<div style="width:' + pct + '%;height:100%;background:#1db954;border-radius:99px;"></div>'
+        + '</div>'
+        + '<div style="width:52px;text-align:right;font-size:12px;font-weight:600;color:' + th.fieldValue + ';">' + c[1].toLocaleString() + '</div>'
         + '</div>';
     }).join('');
   }
