@@ -859,25 +859,32 @@ function renderClicks() {
   // Stats
   const events = clickEntries.filter(e => (e.entry_type || e.type) === 'event');
   const jobs   = clickEntries.filter(e => (e.entry_type || e.type) === 'job');
-  const totalClicks = clickEntries.reduce((s, e) => s + (parseInt(e.apply_clicks || e.applyClicks) || 0), 0);
-  const totalRegs   = events.reduce((s, e) => s + (parseInt(e.registrations) || 0), 0);
+  const totalEventClicks = events.reduce((s, e) => s + (parseInt(e.apply_clicks || e.applyClicks) || 0), 0);
+  const totalJobClicks   = jobs.reduce((s, e) => s + (parseInt(e.apply_clicks || e.applyClicks) || 0), 0);
+  const totalRegs        = events.reduce((s, e) => s + (parseInt(e.registrations) || 0), 0);
 
   // Filter
   const filtered = clickFilter === 'all'   ? clickEntries
                  : clickFilter === 'event' ? events
                  : jobs;
 
-  // Top companies by clicks
-  const byCompany = {};
-  clickEntries.forEach(e => {
-    // Only count job postings, not events
-    if ((e.entry_type || e.type) === 'event') return;
+  // Top companies by job apply clicks
+  const byCompanyJobs = {};
+  jobs.forEach(e => {
     const co = e.company || 'Unknown';
-    byCompany[co] = (byCompany[co] || 0) + (parseInt(e.apply_clicks || e.applyClicks) || 0);
+    byCompanyJobs[co] = (byCompanyJobs[co] || 0) + (parseInt(e.apply_clicks || e.applyClicks) || 0);
   });
-  const topCompanies = Object.entries(byCompany)
-    .sort((a,b) => b[1] - a[1]).slice(0, 5);
-  const maxClicks = topCompanies[0]?.[1] || 1;
+  const topJobCompanies = Object.entries(byCompanyJobs).sort((a,b) => b[1]-a[1]).slice(0, 5);
+  const maxJobClicks = topJobCompanies[0]?.[1] || 1;
+
+  // Top companies by event interest clicks
+  const byCompanyEvents = {};
+  events.forEach(e => {
+    const co = e.company || 'Unknown';
+    byCompanyEvents[co] = (byCompanyEvents[co] || 0) + (parseInt(e.apply_clicks || e.applyClicks) || 0);
+  });
+  const topEventCompanies = Object.entries(byCompanyEvents).sort((a,b) => b[1]-a[1]).slice(0, 5);
+  const maxEventClicks = topEventCompanies[0]?.[1] || 1;
 
   el.innerHTML = `
     <div class="page-header">
@@ -890,23 +897,39 @@ function renderClicks() {
     </div>
 
     <div class="metric-row">
-      <div class="metric-card"><div class="metric-lbl">Total apply clicks</div><div class="metric-val">${totalClicks.toLocaleString()}</div><div class="metric-sub">${clickEntries.length} entr${clickEntries.length !== 1 ? 'ies' : 'y'}</div></div>
-      <div class="metric-card"><div class="metric-lbl">Events logged</div><div class="metric-val">${events.length}</div><div class="metric-sub">${totalRegs.toLocaleString()} total registrations</div></div>
-      <div class="metric-card"><div class="metric-lbl">Job postings logged</div><div class="metric-val">${jobs.length}</div></div>
+      <div class="metric-card"><div class="metric-lbl">Event interest clicks</div><div class="metric-val">${totalEventClicks.toLocaleString()}</div><div class="metric-sub">${events.length} event${events.length !== 1 ? 's' : ''} · ${totalRegs.toLocaleString()} registrations</div></div>
+      <div class="metric-card"><div class="metric-lbl">Job apply clicks</div><div class="metric-val">${totalJobClicks.toLocaleString()}</div><div class="metric-sub">${jobs.length} job posting${jobs.length !== 1 ? 's' : ''}</div></div>
     </div>
 
-    ${topCompanies.length ? `
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.5rem;">
-      <div class="section-title" style="margin-bottom:.75rem;">Top companies by apply clicks</div>
-      ${topCompanies.map(([co, clicks]) =>
-        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
-        + '<div style="width:130px;font-size:12px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + esc(co) + '">' + esc(co) + '</div>'
-        + '<div style="flex:1;height:8px;background:var(--surface);border-radius:99px;overflow:hidden;">'
-        + '<div style="width:' + Math.round(clicks/maxClicks*100) + '%;height:100%;background:var(--g);border-radius:99px;"></div></div>'
-        + '<div style="width:60px;text-align:right;font-size:12px;font-weight:500;color:var(--ink);">' + clicks.toLocaleString() + '</div>'
-        + '</div>'
-      ).join('')}
-    </div>` : ''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+
+      ${topJobCompanies.length ? `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;">
+        <div class="section-title" style="margin-bottom:.75rem;">Top companies · job apply clicks</div>
+        ${topJobCompanies.map(([co, clicks]) =>
+          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
+          + '<div style="width:130px;font-size:12px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + esc(co) + '">' + esc(co) + '</div>'
+          + '<div style="flex:1;height:8px;background:var(--surface);border-radius:99px;overflow:hidden;">'
+          + '<div style="width:' + Math.round(clicks/maxJobClicks*100) + '%;height:100%;background:var(--g);border-radius:99px;"></div></div>'
+          + '<div style="width:50px;text-align:right;font-size:12px;font-weight:500;color:var(--ink);">' + clicks.toLocaleString() + '</div>'
+          + '</div>'
+        ).join('')}
+      </div>` : '<div></div>'}
+
+      ${topEventCompanies.length ? `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;">
+        <div class="section-title" style="margin-bottom:.75rem;">Top companies · event interest clicks</div>
+        ${topEventCompanies.map(([co, clicks]) =>
+          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
+          + '<div style="width:130px;font-size:12px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + esc(co) + '">' + esc(co) + '</div>'
+          + '<div style="flex:1;height:8px;background:var(--surface);border-radius:99px;overflow:hidden;">'
+          + '<div style="width:' + Math.round(clicks/maxEventClicks*100) + '%;height:100%;background:#185FA5;border-radius:99px;"></div></div>'
+          + '<div style="width:50px;text-align:right;font-size:12px;font-weight:500;color:var(--ink);">' + clicks.toLocaleString() + '</div>'
+          + '</div>'
+        ).join('')}
+      </div>` : '<div></div>'}
+
+    </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem;">
 
@@ -1831,9 +1854,12 @@ function renderSlideCard(s, idx) {
             <option value="hs_revenue_comparison">HubSpot: Revenue comparison (bar chart)</option>
           </optgroup>
           <optgroup label="Live: Apply clicks (auto-filled)">
-            <option value="ac_total">Apply clicks: Total</option>
-            <option value="ac_top_companies">Apply clicks: Top companies</option>
+            <option value="ac_total_jobs">Apply clicks: Total · Jobs</option>
+            <option value="ac_total_events">Apply clicks: Total · Events</option>
+            <option value="ac_top_companies">Apply clicks: Top companies · Jobs (bar chart)</option>
+            <option value="ac_top_companies_events">Apply clicks: Top companies · Events (bar chart)</option>
             <option value="ac_events">Apply clicks: Event summary (all)</option>
+            <option value="ac_total">Apply clicks: Combined total</option>
           </optgroup>
           <optgroup label="Live: Mandarin niche (auto-filled)">
             <option value="ac_mandarin_events">Mandarin: Events held</option>
@@ -2179,9 +2205,12 @@ function renderEntry() {
             hs_yoy:           'HubSpot: YoY growth',
             hs_top_clients:        'HubSpot: Top clients list',
             hs_revenue_comparison: 'HubSpot: Revenue comparison (bar chart)',
-            ac_total:         'Apply clicks: Total',
-            ac_top_companies: 'Apply clicks: Top companies',
-            ac_events:        'Apply clicks: Event summary',
+            ac_total:                'Apply clicks: Combined total',
+            ac_total_jobs:           'Apply clicks: Total · Jobs',
+            ac_total_events:         'Apply clicks: Total · Events',
+            ac_top_companies:        'Apply clicks: Top companies · Jobs',
+            ac_top_companies_events: 'Apply clicks: Top companies · Events',
+            ac_events:               'Apply clicks: Event summary',
             ac_mandarin_events:  'Mandarin: Events held',
             ac_mandarin_regs:    'Mandarin: Total registrants',
             ac_mandarin_att:     'Mandarin: Total attendees',
@@ -2434,13 +2463,22 @@ async function resolveLiveData() {
   if (_liveCache) return _liveCache;
   const hs = await loadHubSpotForPeriod();
   const totalClicks = clickEntries.reduce(function(s,e) { return s + (parseInt(e.apply_clicks || e.applyClicks) || 0); }, 0);
+  const totalJobClicks   = clickEntries.filter(function(e){ return (e.entry_type||e.type)==='job'; }).reduce(function(s,e){ return s+(parseInt(e.apply_clicks||e.applyClicks)||0); }, 0);
+  const totalEventClicks = clickEntries.filter(function(e){ return (e.entry_type||e.type)==='event'; }).reduce(function(s,e){ return s+(parseInt(e.apply_clicks||e.applyClicks)||0); }, 0);
   const byCompany = {};
   clickEntries.forEach(function(e) {
-    if ((e.entry_type || e.type) === 'event') return; // exclude events
+    if ((e.entry_type || e.type) === 'event') return;
     const co = e.company || 'Unknown';
     byCompany[co] = (byCompany[co] || 0) + (parseInt(e.apply_clicks || e.applyClicks) || 0);
   });
   const topCo = Object.entries(byCompany).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+  const byCompanyEv = {};
+  clickEntries.forEach(function(e) {
+    if ((e.entry_type || e.type) !== 'event') return;
+    const co = e.company || 'Unknown';
+    byCompanyEv[co] = (byCompanyEv[co] || 0) + (parseInt(e.apply_clicks || e.applyClicks) || 0);
+  });
+  const topCoEvents = Object.entries(byCompanyEv).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
   // Mandarin event aggregates
   const mandarinEvents   = clickEntries.filter(function(e){ return (e.entry_type||e.type)==='event' && (e.is_mandarin||e.isMandarin); });
   const mandarinEvtCount = mandarinEvents.length;
@@ -2453,7 +2491,7 @@ async function resolveLiveData() {
 
   const events = clickEntries.filter(function(e){return (e.entry_type||e.type)==='event';});
 
-  _liveCache = { hs, totalClicks, topCo, events, mandarinEvtCount, mandarinRegs, mandarinAtt, mandarinCVs, mandarinClients };
+  _liveCache = { hs, totalClicks, totalJobClicks, totalEventClicks, topCo, topCoEvents, events, mandarinEvtCount, mandarinRegs, mandarinAtt, mandarinCVs, mandarinClients };
   return _liveCache;
 }
 
@@ -2520,7 +2558,9 @@ function resolveLiveField(type, live, snapshot, ctx, fieldCount, theme) {
   if (type === 'ac_mandarin_clients') return (live.mandarinClients  || 0).toLocaleString() + ' clients';
   if (type === 'ac_mandarin_cvs')     return (live.mandarinCVs      || 0).toLocaleString() + ' apply clicks';
 
-  if (type === 'ac_total') return (live.totalClicks || 0).toLocaleString() + ' apply clicks';
+  if (type === 'ac_total')        return (live.totalClicks      || 0).toLocaleString() + ' apply clicks (combined)';
+  if (type === 'ac_total_jobs')   return (live.totalJobClicks   || 0).toLocaleString() + ' job apply clicks';
+  if (type === 'ac_total_events') return (live.totalEventClicks || 0).toLocaleString() + ' event interest clicks';
   if (type === 'ac_top_companies') {
     if (!live.topCo || !live.topCo.length) return 'No data yet';
     if (snapshot) return live.topCo.map(function(c,i){return (i+1)+'. '+c[0]+' ('+c[1].toLocaleString()+')';}).join(' | ');
@@ -2531,6 +2571,21 @@ function resolveLiveField(type, live, snapshot, ctx, fieldCount, theme) {
         + '<div style="width:200px;font-size:12px;color:' + th.fieldValue + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + esc(c[0]) + '">' + esc(c[0]) + '</div>'
         + '<div style="flex:1;height:8px;background:' + th.border + ';border-radius:99px;overflow:hidden;">'
         + '<div style="width:' + pct + '%;height:100%;background:#1db954;border-radius:99px;"></div>'
+        + '</div>'
+        + '<div style="width:52px;text-align:right;font-size:12px;font-weight:600;color:' + th.fieldValue + ';">' + c[1].toLocaleString() + '</div>'
+        + '</div>';
+    }).join('');
+  }
+  if (type === 'ac_top_companies_events') {
+    if (!live.topCoEvents || !live.topCoEvents.length) return 'No event click data yet';
+    if (snapshot) return live.topCoEvents.map(function(c,i){return (i+1)+'. '+c[0]+' ('+c[1].toLocaleString()+')';}).join(' | ');
+    var maxCoEv = live.topCoEvents[0][1] || 1;
+    return live.topCoEvents.map(function(c) {
+      var pct = Math.round(c[1] / maxCoEv * 100);
+      return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;">'
+        + '<div style="width:200px;font-size:12px;color:' + th.fieldValue + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + esc(c[0]) + '">' + esc(c[0]) + '</div>'
+        + '<div style="flex:1;height:8px;background:' + th.border + ';border-radius:99px;overflow:hidden;">'
+        + '<div style="width:' + pct + '%;height:100%;background:#185FA5;border-radius:99px;"></div>'
         + '</div>'
         + '<div style="width:52px;text-align:right;font-size:12px;font-weight:600;color:' + th.fieldValue + ';">' + c[1].toLocaleString() + '</div>'
         + '</div>';
