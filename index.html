@@ -199,16 +199,16 @@ input, select, textarea { font-family: var(--font); }
 .pres-slide-wrap { width: 1280px; max-width: calc(100vw - 4rem); margin: 0 auto 5rem; display: block; }
 .pres-slide { width: 100%; height: 0; padding-bottom: 56.25%; background: #fff; border: none; border-radius: 6px; overflow: hidden; position: relative; box-shadow: 0 12px 48px rgba(0,0,0,0.45); }
 .pres-slide-inner { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden; }
-.pres-slide-head { background: var(--g); padding: .75rem 2rem; flex-shrink: 0; }
-.pres-slide-num { font-size: 10px; color: rgba(255,255,255,.65); margin-bottom: 2px; letter-spacing: .03em; }
-.pres-slide-title { font-size: 32px; font-weight: 700; color: #fff; letter-spacing: -.02em; line-height: 1.2; }
-.pres-slide-body { padding: 1.75rem 2rem; flex: 1; min-height: 0; overflow: hidden; }
+.pres-slide-head { background: var(--g); padding: .3rem 2rem; flex-shrink: 0; }
+.pres-slide-num { font-size: 9px; color: rgba(255,255,255,.5); letter-spacing: .06em; }
+.pres-slide-title { font-size: 21px; font-weight: 700; color: #fff; letter-spacing: -.01em; line-height: 1.25; }
+.pres-slide-body { padding: 1.1rem 2rem 1rem; flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .pres-pfield { padding: 10px 0; border-bottom: 1px solid #E5E7EB; }
 .pres-pfield:last-child { border-bottom: none; padding-bottom: 0; }
 .pres-pfield-label { font-size: 11px; color: #8A8A8A; margin-bottom: 3px; font-weight: 500; letter-spacing: .02em; text-transform: uppercase; }
 .pres-pfield-value { font-size: 16px; font-weight: 600; color: #1F2A24; }
 .pres-pfield-empty { font-size: 13px; color: #8A8A8A; font-style: italic; }
-.pres-slide-meta { font-size: 10px; color: #4a4a48; margin-top: 12px; font-family: var(--mono); }
+.pres-slide-meta { font-size: 9px; color: #4a4a48; margin-top: 8px; font-family: var(--mono); }
 
 /* ─── UTILS ──────────────────────────────────────────────── */
 .empty-state { text-align: center; padding: 3rem 1rem; color: var(--ink3); }
@@ -2774,54 +2774,93 @@ async function buildPresHTML(snapshot) {
     }
 
     // -- Data slide layout (default) ---------------------------
-    return '<div class="pres-slide-wrap"><div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '" style="background:' + t.slideBg + ';border-color:' + t.border + ';">' + '<div class="pres-slide-inner">'
-      + '<div class="pres-slide-head" style="background:' + t.headerBg + ';">'
-      + '<div class="pres-slide-num" style="color:' + t.meta + '">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
-      + '<div class="pres-slide-title" style="color:' + t.headerText + '">' + esc(s.title) + '</div>'
-      + (periodLabel && hasLiveFields ? '<div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px;">Period: ' + esc(periodLabel) + '</div>' : '')
-      + '</div>'
-      + '<div class="pres-slide-body">'
-      + (e && e.period ? '<div class="pres-slide-meta" style="margin-bottom:1rem;color:' + t.meta + '">Period: ' + esc(e.period) + '</div>' : '')
-      + s.fields.map(function(f) {
-          const isLive = f.type.startsWith('hs_') || f.type.startsWith('ac_');
-          const rawVal = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+    // Classify fields by visual treatment
+    var STAT_TYPES = {number:1,currency:1,percent:1,hs_contracted:1,hs_payments:1,hs_deals:1,hs_avg_deal:1,hs_qoq:1,hs_yoy:1,ac_total:1,ac_total_jobs:1,ac_total_events:1,ev_registrations:1,ev_attendees:1,ev_attendance_rate:1,ev_clicks:1,ac_mandarin_events:1,ac_mandarin_regs:1,ac_mandarin_att:1,ac_mandarin_clients:1,ac_mandarin_cvs:1};
+    var WIDE_TYPES  = {ac_top_companies:1,ac_top_companies_events:1,hs_top_clients:1,ac_events:1,hs_revenue_comparison:1};
+    var sFields   = s.fields.filter(function(f){ return STAT_TYPES[f.type]; });
+    var wFields   = s.fields.filter(function(f){ return WIDE_TYPES[f.type]; });
+    var imgFields = s.fields.filter(function(f){ return f.type === 'image'; });
+    var tFields   = s.fields.filter(function(f){ return !STAT_TYPES[f.type] && !WIDE_TYPES[f.type] && f.type !== 'image'; });
 
-          // Image field rendering (supports multiple images as JSON array)
-          if (f.type === 'image') {
-            var imgUrls = [];
-            try {
-              var parsed = JSON.parse(rawVal || '[]');
-              imgUrls = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
-            } catch(err) { imgUrls = rawVal ? [rawVal] : []; }
-            var imgGrid = imgUrls.length
-              ? '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;justify-content:center;">'
-                + imgUrls.map(function(url) {
-                    return url ? '<img src="' + url + '" style="max-height:260px;max-width:' + (imgUrls.length === 1 ? '100%' : 'calc(50% - 4px)') + ';border-radius:8px;object-fit:contain;flex:1;min-width:120px;display:block;margin:0 auto;" onerror="this.hidden=true">' : '';
-                  }).join('')
-                + '</div>'
-              : '<div class="pres-pfield-empty">No images uploaded yet.</div>';
-            return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';">'
-              + '<div class="pres-pfield-label" style="color:' + t.fieldLabel + ';">' + esc(f.label) + '</div>'
-              + imgGrid + '</div>';
-          }
+    // Stat card sizing — fewer cards = bigger numbers
+    var nStats  = sFields.length;
+    var sFontPx = nStats <= 2 ? 56 : nStats <= 4 ? 46 : nStats <= 6 ? 38 : 30;
+    var sCols   = Math.min(nStats, 4);
+    var cardBg  = t.slideBg === '#1a1a18' ? 'rgba(255,255,255,.07)' : t.slideBg === '#1db954' ? 'rgba(0,0,0,.14)' : '#F0F4F2';
+    var lBadge  = '<span style="font-size:8px;padding:1px 4px;border-radius:99px;background:rgba(29,185,84,.18);color:#1db954;font-weight:700;vertical-align:middle;margin-left:4px;">LIVE</span>';
 
-          // Build context for ev_ fields (event name picker)
-          var fieldCtx = null;
-          if (f.type.startsWith('ev_') && e && e.data) {
-            fieldCtx = { _evName: e.data['_event_pick_' + f.id] || '' };
-          }
-          const value = isLive
-            ? resolveLiveField(f.type, live, snapshot, fieldCtx)
-            : (f.type === 'text' ? escNL(rawVal || '--') : esc(rawVal || '--'));
-
-          return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';">' 
-            + '<div class="pres-pfield-label">' + esc(f.label) + (isLive ? ' <span style="font-size:9px;padding:1px 5px;border-radius:99px;background:rgba(29,185,84,.2);color:#1db954;font-weight:600;">LIVE</span>' : '') + '</div>'
-            + '<div class="pres-pfield-value" style="color:' + t.fieldValue + ';">' + value + '</div>'
+    // — Stat grid —
+    var statHTML = sFields.length ? '<div style="display:grid;grid-template-columns:repeat(' + sCols + ',1fr);gap:12px;margin-bottom:' + (tFields.length || wFields.length ? '16px' : '0') + ';">'
+      + sFields.map(function(f) {
+          var isLv = f.type.startsWith('hs_') || f.type.startsWith('ac_') || f.type.startsWith('ev_');
+          var raw  = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+          var val  = isLv ? resolveLiveField(f.type, live, snapshot, null, nStats, t) : esc(raw || '--');
+          // For stat cards show only the numeric/value token (strip verbose suffix)
+          var dispVal = (val && val !== '--') ? val.split(' ')[0] : val;
+          return '<div style="background:' + cardBg + ';border-radius:10px;padding:16px 20px;min-height:88px;display:flex;flex-direction:column;justify-content:space-between;">'
+            + '<div style="font-size:9px;font-weight:700;color:' + t.fieldLabel + ';letter-spacing:.08em;text-transform:uppercase;line-height:1.3;">' + esc(f.label) + (isLv ? lBadge : '') + '</div>'
+            + '<div style="font-size:' + sFontPx + 'px;font-weight:800;color:' + t.fieldValue + ';line-height:1;letter-spacing:-1.5px;margin-top:8px;">' + dispVal + '</div>'
             + '</div>';
         }).join('')
-      + (!e && !hasLiveFields ? '<div class="pres-pfield-empty">No data entered yet.</div>' : '')
-      + (e ? '<div class="pres-slide-meta" style="margin-top:12px;color:' + t.meta + ';">Updated ' + fmtTs(e.ts || e.created_at) + ' · ' + esc(e.by) + '</div>' : '')
-      + disclaimer
+      + '</div>' : '';
+
+    // — Text / normal field grid (2 cols) —
+    var tCols    = tFields.length === 1 ? 1 : 2;
+    var textHTML = tFields.length ? '<div style="display:grid;grid-template-columns:repeat(' + tCols + ',1fr);gap:14px;margin-bottom:' + (wFields.length ? '16px' : '0') + ';">'
+      + tFields.map(function(f) {
+          var isLv  = f.type.startsWith('hs_') || f.type.startsWith('ac_') || f.type.startsWith('ev_');
+          var raw   = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+          var fCtx  = (f.type.startsWith('ev_') && e && e.data) ? { _evName: e.data['_event_pick_' + f.id] || '' } : null;
+          var val   = isLv ? resolveLiveField(f.type, live, snapshot, fCtx, null, t)
+                    : (f.type === 'text' ? escNL(raw || '--') : esc(raw || '--'));
+          return '<div style="border-left:3px solid #1AA463;padding:2px 0 2px 14px;">'
+            + '<div style="font-size:9px;font-weight:700;color:' + t.fieldLabel + ';letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">' + esc(f.label) + (isLv ? lBadge : '') + '</div>'
+            + '<div style="font-size:16px;font-weight:600;color:' + t.fieldValue + ';line-height:1.45;">' + val + '</div>'
+            + '</div>';
+        }).join('')
+      + '</div>' : '';
+
+    // — Wide fields: bar charts, ranked lists — full width —
+    var wideHTML = wFields.map(function(f) {
+        var isLv = f.type.startsWith('hs_') || f.type.startsWith('ac_');
+        var raw  = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+        var val  = isLv ? resolveLiveField(f.type, live, snapshot, null, null, t) : esc(raw || '--');
+        return '<div style="margin-bottom:14px;">'
+          + '<div style="font-size:9px;font-weight:700;color:' + t.fieldLabel + ';letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;">' + esc(f.label) + lBadge + '</div>'
+          + val
+          + '</div>';
+      }).join('');
+
+    // — Image fields —
+    var imgHTML2 = imgFields.map(function(f) {
+        var raw = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+        var urls2 = [];
+        try { var p2 = JSON.parse(raw || '[]'); urls2 = Array.isArray(p2) ? p2.filter(Boolean) : (p2 ? [p2] : []); } catch(er){ urls2 = raw ? [raw] : []; }
+        return urls2.length
+          ? '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;justify-content:center;">'
+            + urls2.map(function(url){ return url ? '<img src="' + url + '" style="max-height:240px;max-width:' + (urls2.length === 1 ? '100%' : 'calc(50% - 4px)') + ';border-radius:8px;object-fit:contain;flex:1;min-width:120px;display:block;margin:0 auto;" onerror="this.hidden=true">' : ''; }).join('')
+            + '</div>' : '';
+      }).join('');
+
+    // — Bottom bar: meta + disclaimer —
+    var bottomBar = '<div style="margin-top:auto;display:flex;align-items:baseline;justify-content:space-between;padding-top:6px;flex-shrink:0;">'
+      + (e ? '<div style="font-size:9px;color:' + t.meta + ';font-family:monospace;">' + (e.period ? 'Period: ' + esc(e.period) + ' · ' : '') + 'Updated ' + fmtTs(e.ts || e.created_at) + ' · ' + esc(e.by) + '</div>' : '<div></div>')
+      + '<div style="font-size:9px;color:' + t.disclaimer + ';">Designed by Myra via Claude AI</div>'
+      + '</div>';
+
+    return '<div class="pres-slide-wrap"><div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '" style="background:' + t.slideBg + ';border-color:' + t.border + ';">'
+      + '<div class="pres-slide-inner">'
+      + '<div class="pres-slide-head" style="background:' + t.headerBg + ';">'
+      + '<div class="pres-slide-num" style="color:' + t.meta + '">Slide ' + (i+1) + ' of ' + slides.length + (periodLabel && hasLiveFields ? ' · ' + esc(periodLabel) : '') + '</div>'
+      + '<div class="pres-slide-title" style="color:' + t.headerText + '">' + esc(s.title) + '</div>'
+      + '</div>'
+      + '<div class="pres-slide-body">'
+      + imgHTML2
+      + statHTML
+      + textHTML
+      + wideHTML
+      + (!e && !hasLiveFields ? '<div style="font-size:14px;color:' + t.fieldLabel + ';font-style:italic;padding:1rem 0;">No data entered yet.</div>' : '')
+      + bottomBar
       + '</div>'
       + '</div>'
       + '</div>'
@@ -3040,16 +3079,16 @@ body{font-family:'DM Sans',sans-serif;background:#f5f5f3;padding:2.5rem 1.5rem;c
 .cover h1{font-size:28px;font-weight:700;color:#fff;margin-bottom:4px}
 .cover p{font-size:14px;color:rgba(255,255,255,.8)}
 .pres-slide{max-width:100%;width:100%;margin:0 0 1.5rem;background:#fff;border:1px solid #e5e5e3;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06)}
-.pres-slide-head{background:#1db954;padding:1.25rem 1.5rem}
-.pres-slide-num{font-size:11px;color:rgba(255,255,255,.65);margin-bottom:3px}
-.pres-slide-title{font-size:20px;font-weight:600;color:#fff}
-.pres-slide-body{padding:1.5rem}
+.pres-slide-head{background:#1db954;padding:.4rem 1.5rem}
+.pres-slide-num{font-size:9px;color:rgba(255,255,255,.5);letter-spacing:.05em}
+.pres-slide-title{font-size:18px;font-weight:700;color:#fff}
+.pres-slide-body{padding:1.1rem 1.5rem 1rem;display:flex;flex-direction:column}
 .pres-pfield{padding:10px 0;border-bottom:1px solid #f0f0ee}
 .pres-pfield:last-child{border-bottom:none;padding-bottom:0}
-.pres-pfield-label{font-size:11px;color:#888;margin-bottom:3px}
-.pres-pfield-value{font-size:16px;font-weight:500;color:#0f0f0f}
+.pres-pfield-label{font-size:10px;color:#888;margin-bottom:3px;letter-spacing:.05em;text-transform:uppercase;font-weight:700}
+.pres-pfield-value{font-size:15px;font-weight:500;color:#0f0f0f}
 .pres-pfield-empty{font-size:13px;color:#bbb;font-style:italic}
-.pres-slide-meta{font-size:10px;color:#aaa;margin-top:12px;font-family:monospace}
+.pres-slide-meta{font-size:9px;color:#aaa;margin-top:8px;font-family:monospace}
 .footer{text-align:center;font-size:11px;color:#aaa;max-width:720px;margin:0 auto;padding:1rem 0 2rem}
 </style>
 </head>
