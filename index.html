@@ -1828,6 +1828,7 @@ function renderSlideCard(s, idx) {
             <option value="hs_qoq">HubSpot: QoQ growth</option>
             <option value="hs_yoy">HubSpot: YoY growth</option>
             <option value="hs_top_clients">HubSpot: Top clients list</option>
+            <option value="hs_revenue_comparison">HubSpot: Revenue comparison (bar chart)</option>
           </optgroup>
           <optgroup label="Live: Apply clicks (auto-filled)">
             <option value="ac_total">Apply clicks: Total</option>
@@ -2176,7 +2177,8 @@ function renderEntry() {
             hs_avg_deal:      'HubSpot: Avg deal size',
             hs_qoq:           'HubSpot: QoQ growth',
             hs_yoy:           'HubSpot: YoY growth',
-            hs_top_clients:   'HubSpot: Top clients list',
+            hs_top_clients:        'HubSpot: Top clients list',
+            hs_revenue_comparison: 'HubSpot: Revenue comparison (bar chart)',
             ac_total:         'Apply clicks: Total',
             ac_top_companies: 'Apply clicks: Top companies',
             ac_events:        'Apply clicks: Event summary',
@@ -2483,6 +2485,34 @@ function resolveLiveField(type, live, snapshot, ctx, fieldCount, theme) {
         + '</div>';
     }).join('');
   }
+  if (type === 'hs_revenue_comparison') {
+    var cur  = hs.total_contracted_usd || 0;
+    var qoqV = hs.qoq_total            || 0;
+    var yoyV = hs.yoy_total            || 0;
+    var curL = hs.quarter              || 'Current';
+    var qoqL = hs.qoq_label           || 'Prev period';
+    var yoyL = hs.yoy_label           || 'Prev year';
+    if (snapshot) return curL + ': ' + fmtUSD(cur) + ' | ' + qoqL + ': ' + fmtUSD(qoqV) + ' | ' + yoyL + ': ' + fmtUSD(yoyV);
+    var maxV = Math.max(cur, qoqV, yoyV) || 1;
+    var rows = [
+      { label: curL, value: cur,  pct: Math.round(cur/maxV*100),  badge: null },
+      { label: qoqL, value: qoqV, pct: Math.round(qoqV/maxV*100), badge: hs.qoq_growth_pct != null ? fmtPct(hs.qoq_growth_pct) + ' QoQ' : null },
+      { label: yoyL, value: yoyV, pct: Math.round(yoyV/maxV*100), badge: hs.yoy_growth_pct != null ? fmtPct(hs.yoy_growth_pct) + ' YoY' : null },
+    ];
+    return rows.map(function(r, i) {
+      var barColor = i === 0 ? '#1db954' : (i === 1 ? '#185FA5' : '#7B5EA7');
+      var badgeColor = r.badge ? ((parseFloat(r.badge) >= 0) ? '#1db954' : '#e24b4a') : null;
+      return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
+        + '<div style="width:90px;font-size:11px;color:' + th.fieldLabel + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + esc(r.label) + '">' + esc(r.label) + '</div>'
+        + '<div style="flex:1;height:10px;background:' + th.border + ';border-radius:99px;overflow:hidden;">'
+        + '<div style="width:' + r.pct + '%;height:100%;background:' + barColor + ';border-radius:99px;"></div>'
+        + '</div>'
+        + '<div style="width:80px;text-align:right;font-size:12px;font-weight:600;color:' + th.fieldValue + ';">' + fmtUSD(r.value) + '</div>'
+        + (r.badge ? '<div style="min-width:60px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;background:' + badgeColor + ';color:#fff;white-space:nowrap;">' + r.badge + '</div>' : '<div style="min-width:60px;"></div>')
+        + '</div>';
+    }).join('');
+  }
+
   // Mandarin niche fields
   if (type === 'ac_mandarin_events')  return (live.mandarinEvtCount || 0).toLocaleString() + ' events';
   if (type === 'ac_mandarin_regs')    return (live.mandarinRegs     || 0).toLocaleString() + ' registrants';
@@ -2498,7 +2528,7 @@ function resolveLiveField(type, live, snapshot, ctx, fieldCount, theme) {
     return live.topCo.map(function(c) {
       var pct = Math.round(c[1] / maxCo * 100);
       return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;">'
-        + '<div style="width:130px;font-size:12px;color:' + th.fieldValue + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + esc(c[0]) + '">' + esc(c[0]) + '</div>'
+        + '<div style="width:200px;font-size:12px;color:' + th.fieldValue + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + esc(c[0]) + '">' + esc(c[0]) + '</div>'
         + '<div style="flex:1;height:8px;background:' + th.border + ';border-radius:99px;overflow:hidden;">'
         + '<div style="width:' + pct + '%;height:100%;background:#1db954;border-radius:99px;"></div>'
         + '</div>'
