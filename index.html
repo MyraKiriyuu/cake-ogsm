@@ -2829,12 +2829,10 @@ async function buildPresHTML(snapshot) {
       var evImgHTML = '';
       s.fields.filter(function(f){ return f.type === 'image'; }).forEach(function(f) {
         var raw2 = e && e.data && e.data[f.id] ? e.data[f.id] : '';
-        console.log('[Slide ' + (i+1) + ' "' + s.title + '"] image field raw:', raw2 ? raw2.toString().slice(0,120) : '(empty)');
         if (!raw2) return;
         var urls2 = [];
         try { var p2 = JSON.parse(raw2); urls2 = Array.isArray(p2) ? p2.filter(Boolean) : (p2 ? [p2] : []); } catch(err){ urls2 = raw2 ? [raw2] : []; }
-        console.log('[Slide ' + (i+1) + '] parsed URLs:', urls2);
-        evImgHTML += urls2.map(function(url){ return '<img src="' + url + '" onerror="console.warn(\'[Slide ' + (i+1) + '] img load failed:\', this.src); this.hidden=true" alt="">'; }).join('');
+        evImgHTML += urls2.map(function(url){ return '<img src="' + url + '" onerror="this.hidden=true" alt="">'; }).join('');
       });
 
       // Subtitle field gets top billing in the right panel
