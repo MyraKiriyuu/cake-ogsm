@@ -2835,17 +2835,28 @@ async function buildPresHTML(snapshot) {
         evImgHTML += urls2.map(function(url){ return '<img src="' + url + '" onerror="this.hidden=true" alt="">'; }).join('');
       });
 
-      // Note fields: non-ev_, non-image fields
-      var evNoteFields = s.fields.filter(function(f){ return !f.type.startsWith('ev_') && f.type !== 'image'; });
-      var evNoteHTML = evNoteFields.map(function(f) {
+      // Subtitle field gets top billing in the right panel
+      var evSubField = s.fields.find(function(f){
+        var lbl = f.label.toLowerCase();
+        return lbl.includes('subtitle') || lbl.includes('sub-title');
+      });
+      var evSubVal = evSubField && e && e.data ? esc(e.data[evSubField.id] || '') : '';
+
+      // Note fields: non-ev_, non-image, non-subtitle fields
+      var evNoteFields = s.fields.filter(function(f){ return !f.type.startsWith('ev_') && f.type !== 'image' && f !== evSubField; });
+      var evNoteHTML = '';
+      if (evSubVal) {
+        evNoteHTML += '<div><div class="nl">About</div><div class="nv">' + evSubVal + '</div></div>';
+      }
+      evNoteFields.forEach(function(f) {
         var raw3 = e && e.data && e.data[f.id] ? e.data[f.id] : '';
         var isLv3 = f.type.startsWith('hs_') || f.type.startsWith('ac_');
         var val3 = isLv3 ? resolveLiveField(f.type, live, snapshot, null) : esc(raw3 || '');
-        if (!val3 || val3 === '--') return '';
-        return '<div><div class="nl">' + esc(f.label) + '</div><div class="nv">' + val3 + '</div></div>';
-      }).join('');
-      if (!evNoteHTML && ev && ev.note) {
-        evNoteHTML = '<div><div class="nl">Notes</div><div class="nv">' + esc(ev.note) + '</div></div>';
+        if (!val3 || val3 === '--') return;
+        evNoteHTML += '<div><div class="nl">' + esc(f.label) + '</div><div class="nv">' + val3 + '</div></div>';
+      });
+      if (ev && ev.note) {
+        evNoteHTML += '<div><div class="nl">Notes</div><div class="nv">' + esc(ev.note) + '</div></div>';
       }
       if (!evNoteHTML && !ev) {
         evNoteHTML = '<div><div class="nl">Event</div><div class="nv" style="color:var(--mute);">No event selected. Go to Data entry and pick an event.</div></div>';
