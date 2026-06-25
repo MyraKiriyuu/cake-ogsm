@@ -10,7 +10,7 @@
   const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRwanN5ZWhiYmhxcXZ2eGtybG91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NTI4NDYsImV4cCI6MjA5NjEyODg0Nn0.7TOz7AvJxdK419gYZcFRcLyBY3Gk7bCdO6wsld_DyGU';
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 /* ─── TOKENS ─────────────────────────────────────────────── */
 :root {
@@ -210,6 +210,117 @@ input, select, textarea { font-family: var(--font); }
 .pres-pfield-empty { font-size: 13px; color: #8A8A8A; font-style: italic; }
 .pres-slide-meta { font-size: 9px; color: #4a4a48; margin-top: 8px; font-family: var(--mono); }
 
+/* ─── SLIDE DESIGN SYSTEM (Inter, 1280×720) ──────────────── */
+/* CSS vars scoped to .s so they don't conflict with app :root vars */
+.s{--ink:#1F2A24;--body:#4A5550;--mute:#8A8A8A;--green:#1AA463;--gd:#0F7A47;--gs:#E8F5EE;--dark:#0F3B2E;--line:#E5E7EB;--sc:#F7F9F8;--cb:#E1E7E4;}
+.s{width:1280px;height:720px;background:#fff;box-sizing:border-box;position:relative;overflow:hidden;font-family:'Inter',-apple-system,sans-serif;-webkit-font-smoothing:antialiased;}
+/* Scaler wrapper: sits inside .pres-slide-inner, scaled to fit */
+.s-scaler{position:absolute;top:0;left:0;width:1280px;height:720px;transform-origin:top left;}
+/* Logo mark */
+.s .mk{position:absolute;top:32px;right:40px;z-index:10;}
+.s .mk svg{display:block;height:22px;width:auto;}
+/* Slide number */
+.s .snum{position:absolute;top:22px;left:28px;font-size:10px;font-weight:700;color:var(--mute);letter-spacing:2px;}
+/* Section label pill */
+.s .pill{display:inline-flex;align-items:center;padding:5px 12px 5px 16px;font-size:14px;font-weight:700;color:var(--ink);border-left:5px solid var(--green);margin-bottom:14px;}
+/* Takeaway bar */
+.s .tkwy{position:absolute;left:72px;right:72px;bottom:40px;background:var(--gs);color:var(--gd);padding:12px 20px;font-weight:700;font-size:14px;border-radius:4px;}
+
+/* ── Title slide (.tb) ── */
+.tb{background:#fff;display:flex;padding:0;}
+.tb .bar{width:8px;background:var(--green);flex-shrink:0;}
+.tb .body{flex:1;display:flex;flex-direction:column;justify-content:center;padding:64px 88px;position:relative;}
+.tb .ey{font-size:11px;font-weight:800;color:var(--gd);letter-spacing:4px;text-transform:uppercase;margin-bottom:18px;}
+.tb .ht{font-size:64px;font-weight:900;color:var(--ink);letter-spacing:-2.5px;line-height:1.05;margin:0 0 20px;}
+.tb .hs{font-size:22px;font-weight:400;color:var(--body);max-width:700px;line-height:1.5;}
+.tb .tags{display:flex;gap:8px;margin-top:28px;flex-wrap:wrap;}
+.tb .tags .t{background:var(--gs);color:var(--gd);padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;}
+.tb .rm{position:absolute;bottom:40px;right:80px;font-size:200px;font-weight:900;color:rgba(26,164,99,.06);line-height:1;letter-spacing:-6px;user-select:none;pointer-events:none;}
+
+/* ── Data/Revenue slide (.da) ── */
+.da{padding:48px 72px 100px;}
+.da h1{font-size:36px;font-weight:800;line-height:1.15;color:var(--ink);margin:0 0 6px;letter-spacing:-1.2px;}
+.da h2{font-size:15px;font-weight:500;line-height:1.4;color:var(--body);margin:0 0 14px;}
+.da .stats{display:grid;gap:11px;margin-bottom:14px;}
+.da .sc{background:var(--sc);border:1px solid var(--cb);border-radius:10px;padding:14px 16px;}
+.da .sc.ac{background:var(--gs);border-color:#BFE3CE;}
+.da .sc .sl{font-size:9px;font-weight:800;color:var(--mute);letter-spacing:2px;text-transform:uppercase;margin-bottom:7px;}
+.da .sc.ac .sl{color:var(--gd);}
+.da .sc .sv{font-size:28px;font-weight:900;color:var(--ink);letter-spacing:-1.5px;line-height:1;}
+.da .sc.ac .sv{color:var(--gd);}
+.da .sc .sd{font-size:10px;color:var(--body);margin-top:3px;}
+.da .main{display:grid;gap:14px;}
+.da .main.cols1{grid-template-columns:1fr;}
+.da .main.cols2{grid-template-columns:1fr 1fr;}
+.da .main.cols3{grid-template-columns:1fr 1fr 1fr;}
+.da .col{background:var(--sc);border:1px solid var(--cb);border-radius:10px;padding:16px 18px;overflow:hidden;}
+.da .col.ac{background:var(--gs);border-color:#BFE3CE;}
+.da .col h3{font-size:9px;font-weight:800;color:var(--mute);letter-spacing:2px;text-transform:uppercase;margin:0 0 10px;}
+.da .col.ac h3{color:var(--gd);}
+.da .pts{list-style:none;padding:0;margin:0;}
+.da .pts li{font-size:12px;color:var(--ink);line-height:1.5;padding:4px 0 4px 15px;border-top:1px dashed var(--cb);position:relative;font-weight:500;}
+.da .pts li:first-child{border-top:none;}
+.da .pts li::before{content:"";position:absolute;left:0;top:12px;width:5px;height:5px;border-radius:50%;background:var(--green);}
+.da .txt{font-size:12px;color:var(--body);line-height:1.6;}
+.da .f-row{margin-bottom:8px;}
+.da .f-lbl{font-size:9px;font-weight:800;color:var(--mute);letter-spacing:2px;text-transform:uppercase;margin-bottom:3px;}
+.da .chart-wrap{display:flex;flex-direction:column;height:100%;}
+.da .chart-wrap h3{font-size:9px;font-weight:800;color:var(--mute);letter-spacing:2px;text-transform:uppercase;margin:0 0 10px;}
+.da .bars{display:flex;align-items:flex-end;gap:16px;flex:1;padding-bottom:4px;}
+.da .bar-item{display:flex;flex-direction:column;align-items:center;flex:1;}
+.da .bar-track{width:100%;display:flex;flex-direction:column;justify-content:flex-end;height:110px;}
+.da .bar-fill{width:100%;border-radius:4px 4px 0 0;}
+.da .bar-val{font-size:12px;font-weight:800;color:var(--ink);margin-bottom:4px;text-align:center;letter-spacing:-.5px;}
+.da .bar-val.g{color:var(--gd);}
+.da .bar-lbl{font-size:9px;font-weight:700;color:var(--mute);text-align:center;margin-top:6px;letter-spacing:.5px;}
+.da .bar-sub{font-size:9px;color:var(--body);text-align:center;margin-top:2px;}
+
+/* ── Goals/Objective slide (.dg) ── */
+.dg{padding:46px 72px 100px;}
+.dg h1{font-size:32px;font-weight:800;line-height:1.2;color:var(--ink);margin:0 0 6px;letter-spacing:-1.2px;}
+.dg h2{font-size:15px;font-weight:500;color:var(--body);margin:0 0 14px;line-height:1.4;}
+.dg .three{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;}
+.dg .tc{background:var(--sc);border:1px solid var(--cb);border-radius:10px;padding:16px 18px;}
+.dg .tc .tl{font-size:9px;font-weight:800;color:var(--mute);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;line-height:1.35;}
+.dg .tc .tv{font-size:36px;font-weight:900;color:var(--ink);letter-spacing:-1.5px;line-height:1;}
+.dg .tc .tv.g{color:var(--gd);}
+.dg .tc .ts{font-size:11px;color:var(--body);margin-top:4px;line-height:1.3;}
+.dg .two{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.dg .col{background:var(--sc);border:1px solid var(--cb);border-radius:10px;padding:16px 18px;overflow:hidden;}
+.dg .col.ac{background:var(--gs);border-color:#BFE3CE;}
+.dg .col h3{font-size:9px;font-weight:800;color:var(--mute);letter-spacing:2px;text-transform:uppercase;margin:0 0 10px;}
+.dg .col.ac h3{color:var(--gd);}
+.dg .pts{list-style:none;padding:0;margin:0;}
+.dg .pts li{font-size:12px;color:var(--ink);line-height:1.5;padding:4px 0 4px 15px;border-top:1px dashed var(--cb);position:relative;font-weight:500;}
+.dg .pts li:first-child{border-top:none;}
+.dg .pts li::before{content:"";position:absolute;left:0;top:12px;width:5px;height:5px;border-radius:50%;background:var(--green);}
+.dg .txt{font-size:12px;color:var(--body);line-height:1.6;}
+
+/* ── Event slide (.eb) ── */
+.eb{padding:0;display:flex;flex-direction:column;}
+.eb .hd{background:var(--dark);padding:22px 48px 18px;position:relative;overflow:hidden;flex-shrink:0;}
+.eb .hd svg.bg{position:absolute;inset:0;width:100%;height:100%;}
+.eb .hd .sn{position:relative;z-index:1;font-size:10px;color:rgba(255,255,255,.4);letter-spacing:2px;margin-bottom:6px;}
+.eb .hd .ht{position:relative;z-index:1;font-size:28px;font-weight:900;color:#fff;letter-spacing:-.8px;line-height:1.15;margin-bottom:3px;}
+.eb .hd .sub{position:relative;z-index:1;font-size:12px;color:rgba(255,255,255,.62);line-height:1.3;}
+.eb .strip{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--line);flex-shrink:0;}
+.eb .st{padding:14px 24px;border-right:1px solid var(--line);}
+.eb .st:last-child{border-right:none;}
+.eb .st.ac{background:var(--gs);}
+.eb .st .sl{font-size:9px;font-weight:800;color:var(--mute);letter-spacing:2px;text-transform:uppercase;margin-bottom:7px;}
+.eb .st.ac .sl{color:var(--gd);}
+.eb .st .sv{font-size:34px;font-weight:900;color:var(--ink);letter-spacing:-1.5px;line-height:1;}
+.eb .st.ac .sv{color:var(--gd);}
+.eb .st .sd{font-size:10px;color:var(--body);margin-top:3px;}
+.eb .lower{flex:1;display:flex;min-height:0;}
+.eb .photos{flex:1;padding:14px 14px 14px 48px;display:flex;gap:10px;align-items:center;}
+.eb .photos img{border-radius:6px;object-fit:cover;flex:1;min-width:0;height:185px;width:100%;}
+.eb .photos .no-photo{flex:1;display:flex;align-items:center;justify-content:center;color:rgba(0,0,0,.2);font-size:13px;font-family:'Inter',sans-serif;}
+.eb .note-col{width:300px;flex-shrink:0;padding:14px 48px 14px 16px;display:flex;flex-direction:column;justify-content:center;gap:12px;border-left:1px solid var(--line);}
+.eb .note-col .nl{font-size:9px;font-weight:800;color:var(--gd);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;}
+.eb .note-col .nv{font-size:12px;color:var(--ink);font-weight:500;line-height:1.55;}
+.eb .note-col .tag{display:inline-flex;align-items:center;background:var(--gs);color:var(--gd);padding:4px 12px;border-radius:3px;font-size:11px;font-weight:700;letter-spacing:1px;}
+
 /* ─── UTILS ──────────────────────────────────────────────── */
 .empty-state { text-align: center; padding: 3rem 1rem; color: var(--ink3); }
 .empty-state-text { font-size: 13px; line-height: 1.6; }
@@ -222,6 +333,17 @@ input, select, textarea { font-family: var(--font); }
 </style>
 </head>
 <body>
+
+<!-- Cake logo symbol — used by slide MK markers -->
+<svg width="0" height="0" style="position:absolute" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <symbol id="ck" viewBox="0 0 112 32">
+    <path d="M32 13.2838V32C21.3333 30.861 10.6667 29.7181 0 28.5752V9.87429C0 9.87429 0 9.87048 0.00380952 9.86667C1.82476 5.77524 6.84571 2.26667 13.7181 0L32 13.2838Z" fill="#13AB67"/>
+    <path d="M58.4039 20.6095L61.1258 23.3314C59.2515 25.2057 56.6553 26.3676 53.7944 26.3676C48.0687 26.3676 43.4268 21.7257 43.4268 15.9999C43.4268 10.2742 48.0687 5.63232 53.7944 5.63232C56.6553 5.63232 59.2496 6.79423 61.1258 8.66851L58.4039 11.3904C57.2249 10.2114 55.5963 9.48375 53.7944 9.48375C50.1963 9.48375 47.2782 12.4018 47.2782 15.9999C47.2782 19.598 50.1963 22.5161 53.7944 22.5161C55.5944 22.5161 57.2249 21.7866 58.4039 20.6095Z" fill="#13AB67"/>
+    <path d="M74.5296 11.5561V12.7999C73.3182 11.6533 71.6953 10.9637 69.7906 10.9637C65.5372 10.9637 62.0896 14.4114 62.0896 18.6647C62.0896 22.918 65.5372 26.3656 69.7906 26.3656C71.6953 26.3656 73.3182 25.6761 74.5296 24.5295V25.7733H78.0839V11.5561H74.5296ZM69.7906 22.8133C67.501 22.8133 65.6439 20.9599 65.6439 18.6666C65.6439 16.3733 67.501 14.5199 69.7906 14.5199C72.0801 14.5199 73.9372 16.3771 73.9372 18.6666C73.9372 20.9561 72.0801 22.8133 69.7906 22.8133Z" fill="#13AB67"/>
+    <path d="M111.851 20.1466C111.949 19.6723 112 19.1752 112 18.6647C112 14.4114 108.92 10.9637 104.151 10.9637C99.381 10.9637 96.301 14.4114 96.301 18.6647C96.301 22.918 99.8172 26.3656 104.151 26.3656C106.973 26.3656 109.493 25.5333 111.151 23.8856L108.749 21.4837C107.827 22.4666 106.29 23.0323 104.152 23.0323C102.015 23.0323 100.61 21.8304 100.13 20.1447H111.853L111.851 20.1466ZM104.151 14.2971C106.345 14.2971 107.693 15.5028 108.173 17.1847H100.128C100.608 15.5028 101.958 14.2971 104.151 14.2971Z" fill="#13AB67"/>
+    <path d="M96.4134 25.7752H91.4096L85.1925 19.558V25.7752H81.6382V5.64185C82.8229 5.76946 84.0077 5.89327 85.1925 6.02089V17.1885L90.8229 11.558H95.8268L89.0115 18.3733L96.4134 25.7752Z" fill="#13AB67"/>
+  </symbol>
+</svg>
 
 <!-- =====================================================
   STEP 1: Paste your Supabase credentials here.
@@ -2646,57 +2768,39 @@ async function buildPresHTML(snapshot) {
     const layout = s.layout || 'data';
     const hasLiveFields = s.fields.some(function(f){return f.type.startsWith('hs_') || f.type.startsWith('ac_');});
     const hasHSFields   = s.fields.some(function(f){return f.type.startsWith('hs_');});
-    const disclaimer = '<div style="margin-top:1.25rem;padding-top:.75rem;border-top:1px solid ' + t.border + ';font-size:10px;color:' + t.disclaimer + ';text-align:right;">Designed by Myra via Claude AI</div>';
+    var MKG = '<div class="mk"><svg viewBox="0 0 112 32" xmlns="http://www.w3.org/2000/svg"><use href="#ck"/></svg></div>';
+    var MKW = '<div class="mk"><svg viewBox="0 0 112 32" xmlns="http://www.w3.org/2000/svg"><use href="#ck" style="filter:brightness(0) invert(1) opacity(.65)"/></svg></div>';
 
-    // -- Title / Divider slide layout --------------------------
+    // -- Title slide (.tb) ------------------------------------
     if (layout === 'title') {
-      // Find subtitle field if any
-      const subtitleField = s.fields.find(function(f){
-        return f.label.toLowerCase().includes('subtitle') || f.label.toLowerCase().includes('sub-title');
+      var subtitleField = s.fields.find(function(f){
+        var lbl = f.label.toLowerCase();
+        return lbl.includes('subtitle') || lbl.includes('sub-title') || lbl.includes('presented by') || lbl.includes('tagline');
       });
-      const subtitleVal = subtitleField && e && e.data ? (e.data[subtitleField.id] || '') : '';
-
-      // Image fields
-      const imageFields = s.fields.filter(function(f){ return f.type === 'image'; });
-
-      // Other text/detail fields (not subtitle, not image, not live)
-      const detailFields = s.fields.filter(function(f){
-        return f !== subtitleField && f.type !== 'image';
-      });
-
-      // Build image HTML (handles JSON array of multiple images)
-      var imageHTML = imageFields.map(function(f) {
-        const raw = e && e.data && e.data[f.id] ? e.data[f.id] : '';
-        if (!raw) return '';
-        var urls = [];
-        try {
-          var parsed = JSON.parse(raw);
-          urls = Array.isArray(parsed) ? parsed.filter(Boolean) : (parsed ? [parsed] : []);
-        } catch(err) { urls = raw ? [raw] : []; }
-        if (!urls.length) return '';
-        return '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:1rem;">'
-          + urls.map(function(url) {
-              return '<img src="' + url + '" style="max-height:200px;max-width:' + (urls.length === 1 ? '80%' : 'calc(50% - 4px)') + ';border-radius:8px;object-fit:contain;flex:1;min-width:100px;display:block;margin:0 auto;" onerror="this.hidden=true">';
-            }).join('')
-          + '</div>';
+      var subtitleVal = subtitleField && e && e.data ? (e.data[subtitleField.id] || '') : '';
+      var tagFields = s.fields.filter(function(f){ return f !== subtitleField && f.type !== 'image'; });
+      var tagsHTML = tagFields.map(function(f) {
+        var isLv = f.type.startsWith('hs_') || f.type.startsWith('ac_');
+        var val = isLv ? resolveLiveField(f.type, live, snapshot, null, null, null)
+                       : (e && e.data && e.data[f.id] ? esc(e.data[f.id]) : '');
+        return val ? '<span class="t">' + val + '</span>' : '';
       }).join('');
+      var wmMatch = s.title.match(/\bQ[1-4]\b|\bH[12]\b|\b20\d{2}\b/);
+      var watermark = wmMatch ? wmMatch[0] : '';
+      var eyebrow = periodLabel ? esc(periodLabel) : 'Cake Indonesia · Business Team';
 
-      return '<div class="pres-slide-wrap"><div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '" style="min-height:0;">' + '<div class="pres-slide-inner">'
-        + '<div style="background:var(--g);padding:2rem 2.5rem;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;flex:1;min-height:0;overflow:hidden;">'
-        + '<div style="font-size:10px;color:rgba(255,255,255,.55);letter-spacing:.1em;text-transform:uppercase;margin-bottom:1rem;">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
-        + imageHTML
-        + '<div class="pres-title-text" style="font-size:52px;font-weight:700;color:#fff;line-height:1.2;margin-bottom:' + (subtitleVal ? '1.25rem' : '.5rem') + ';">' + esc(s.title) + '</div>'
-        + (subtitleVal ? '<div style="font-size:22px;color:rgba(255,255,255,.8);margin-bottom:.5rem;">' + esc(subtitleVal) + '</div>' : '')
-        + (detailFields.length && e ? '<div style="margin-top:1rem;">' + detailFields.map(function(f) {
-            const isLive = f.type.startsWith('hs_') || f.type.startsWith('ac_');
-            const val = isLive ? resolveLiveField(f.type, live, snapshot, null, null, t) : esc(e && e.data && e.data[f.id] ? e.data[f.id] : '');
-            return val ? '<div style="font-size:13px;color:rgba(255,255,255,.75);margin-top:6px;">' + esc(f.label) + ': ' + val + '</div>' : '';
-          }).join('') + '</div>' : '')
-        + '<div style="margin-top:2.5rem;font-size:10px;color:rgba(255,255,255,.3);">Designed by Myra via Claude AI</div>'
+      return '<div class="pres-slide-wrap"><div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '"><div class="pres-slide-inner">'
+        + '<div class="s-scaler s tb">'
+        + '<div class="bar"></div>'
+        + '<div class="body">' + MKG
+        + '<div class="ey">' + eyebrow + '</div>'
+        + '<div class="ht">' + esc(s.title) + '</div>'
+        + (subtitleVal ? '<div class="hs">' + esc(subtitleVal) + '</div>' : '')
+        + (tagsHTML ? '<div class="tags">' + tagsHTML + '</div>' : '')
+        + (watermark ? '<div class="rm">' + esc(watermark) + '</div>' : '')
         + '</div>'
         + '</div>'
-        + '</div>'
-        + '</div>';
+        + '</div></div></div>';
     }
 
     // -- Event slide layout ------------------------------------
@@ -2720,151 +2824,236 @@ async function buildPresHTML(snapshot) {
       const clicks2 = ev ? (parseInt(ev.apply_clicks || ev.applyClicks) || 0) : 0;
       const dateStr = ev ? formatEventDate(ev).replace(' · ','') : '--';
 
-      // Get image fields
+      // Collect photo URLs from image fields
       var evImgHTML = '';
       s.fields.filter(function(f){ return f.type === 'image'; }).forEach(function(f) {
         var raw2 = e && e.data && e.data[f.id] ? e.data[f.id] : '';
         if (!raw2) return;
         var urls2 = [];
         try { var p2 = JSON.parse(raw2); urls2 = Array.isArray(p2) ? p2.filter(Boolean) : (p2 ? [p2] : []); } catch(err){ urls2 = raw2 ? [raw2] : []; }
-        evImgHTML += urls2.map(function(url){ return '<img src="' + url + '" style="max-height:180px;max-width:' + (urls2.length === 1 ? '100%' : '280px') + ';border-radius:8px;object-fit:contain;flex:1;min-width:120px;display:block;margin:0 auto;" onerror="this.hidden=true">'; }).join('');
+        evImgHTML += urls2.map(function(url){ return '<img src="' + url + '" onerror="this.hidden=true" alt="">'; }).join('');
       });
 
-      return '<div class="pres-slide-wrap"><div class="pres-slide" style="background:' + t.slideBg + ';border-color:' + t.border + ';display:flex;flex-direction:column;">' + '<div class="pres-slide-inner">'
-        + '<div style="background:' + t.headerBg + ';padding:1rem 1.5rem;">'
-        + '<div style="font-size:10px;color:' + t.meta + ';">Slide ' + (i+1) + ' of ' + slides.length + '</div>'
-        + '<div style="font-size:26px;font-weight:700;color:' + t.headerText + ';letter-spacing:-.01em;line-height:1.2;">' + esc(s.title) + '</div>'
-        + (ev ? '<div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:2px;">' + esc(ev.title || ev.company || '') + (dateStr !== '--' ? ' · ' + dateStr : '') + '</div>' : '')
+      // Note fields: non-ev_, non-image fields
+      var evNoteFields = s.fields.filter(function(f){ return !f.type.startsWith('ev_') && f.type !== 'image'; });
+      var evNoteHTML = evNoteFields.map(function(f) {
+        var raw3 = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+        var isLv3 = f.type.startsWith('hs_') || f.type.startsWith('ac_');
+        var val3 = isLv3 ? resolveLiveField(f.type, live, snapshot, null) : esc(raw3 || '');
+        if (!val3 || val3 === '--') return '';
+        return '<div><div class="nl">' + esc(f.label) + '</div><div class="nv">' + val3 + '</div></div>';
+      }).join('');
+      if (!evNoteHTML && ev && ev.note) {
+        evNoteHTML = '<div><div class="nl">Notes</div><div class="nv">' + esc(ev.note) + '</div></div>';
+      }
+      if (!evNoteHTML && !ev) {
+        evNoteHTML = '<div><div class="nl">Event</div><div class="nv" style="color:var(--mute);">No event selected. Go to Data entry and pick an event.</div></div>';
+      }
+      var slideTag = ev ? esc((ev.company || ev.title || '') + (dateStr !== '--' ? ' · ' + dateStr : '')) : '';
+
+      return '<div class="pres-slide-wrap"><div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '"><div class="pres-slide-inner">'
+        + '<div class="s-scaler s eb">'
+        + '<div class="hd">'
+        + '<svg class="bg" viewBox="0 0 1280 130" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">'
+        + '<defs><radialGradient id="ebg' + i + '" cx="82%" cy="50%" r="55%"><stop offset="0%" stop-color="#1E7B4D"/><stop offset="100%" stop-color="#0F3B2E"/></radialGradient></defs>'
+        + '<rect width="1280" height="130" fill="#0F3B2E"/>'
+        + '<circle cx="1100" cy="65" r="160" fill="url(#ebg' + i + ')"/>'
+        + '</svg>'
+        + MKW
+        + '<div class="sn">' + (i+1) + ' / ' + slides.length + '</div>'
+        + '<div class="ht">' + esc(s.title) + '</div>'
+        + (ev ? '<div class="sub">' + esc(ev.title || ev.company || '') + (dateStr !== '--' ? ' · ' + dateStr : '') + '</div>' : '')
         + '</div>'
-        + '<div style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:space-evenly;padding:1.5rem 2rem;">'
-        + (evImgHTML ? '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:1rem;">' + evImgHTML + '</div>' : '')
-        + (ev ? '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem;">'
-          + '<div class="ev-stat-card" style="background:' + t.border + ';border-radius:10px;padding:1.25rem;text-align:center;">'
-          + '<div class="ev-stat-lbl" style="font-size:12px;font-weight:500;color:' + t.fieldLabel + ';margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.04em;">Registrations</div>'
-          + '<div class="ev-stat-val" style="font-size:36px;font-weight:700;color:' + t.fieldValue + ';line-height:1;">' + regs.toLocaleString() + '</div>'
-          + '</div>'
-          + '<div class="ev-stat-card" style="background:' + t.border + ';border-radius:10px;padding:1.25rem;text-align:center;">'
-          + '<div class="ev-stat-lbl" style="font-size:12px;font-weight:500;color:' + t.fieldLabel + ';margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.04em;">Attendees</div>'
-          + '<div class="ev-stat-val" style="font-size:36px;font-weight:700;color:' + t.fieldValue + ';line-height:1;">' + att.toLocaleString() + '</div>'
-          + '</div>'
-          + '<div class="ev-stat-card" style="background:' + t.border + ';border-radius:10px;padding:1.25rem;text-align:center;">'
-          + '<div class="ev-stat-lbl" style="font-size:12px;font-weight:500;color:' + t.fieldLabel + ';margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.04em;">Attendance rate</div>'
-          + '<div class="ev-stat-val" style="font-size:36px;font-weight:700;color:#1AA463;line-height:1;">' + rate + '</div>'
-          + '</div>'
-          + (clicks2 ? '<div class="ev-stat-card" style="background:' + t.border + ';border-radius:10px;padding:1.25rem;text-align:center;">'
-          + '<div class="ev-stat-lbl" style="font-size:12px;font-weight:500;color:' + t.fieldLabel + ';margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.04em;">Apply clicks</div>'
-          + '<div class="ev-stat-val" style="font-size:36px;font-weight:700;color:' + t.fieldValue + ';line-height:1;">' + clicks2.toLocaleString() + '</div>'
-          + '</div>' : '')
-          + '</div>' : '<div style="font-size:14px;color:' + t.fieldLabel + ';font-style:italic;">No event selected. Go to Data entry and pick an event.</div>')
-        + s.fields.filter(function(f){ return !f.type.startsWith('ev_') && f.type !== 'image'; }).map(function(f) {
-            var raw3 = e && e.data && e.data[f.id] ? e.data[f.id] : '';
-            var isLive3 = f.type.startsWith('hs_') || f.type.startsWith('ac_');
-            var val3 = isLive3 ? resolveLiveField(f.type, live, snapshot, null) : esc(raw3 || '--');
-            return '<div class="pres-pfield" style="border-bottom-color:' + t.border + ';">'
-              + '<div class="pres-pfield-label" style="color:' + t.fieldLabel + ';">' + esc(f.label) + '</div>'
-              + '<div class="pres-pfield-value" style="color:' + t.fieldValue + ';">' + val3 + '</div>'
-              + '</div>';
-          }).join('')
-        + (ev && ev.note ? '<div style="font-size:12px;color:' + t.fieldLabel + ';margin-top:.75rem;font-style:italic;">' + esc(ev.note) + '</div>' : '')
-        + '<div style="padding-top:.5rem;font-size:9px;color:' + t.disclaimer + ';text-align:right;">Designed by Myra via Claude AI</div>'
+        + '<div class="strip">'
+        + '<div class="st"><div class="sl">Registrations</div><div class="sv">' + (ev ? regs.toLocaleString() : '--') + '</div></div>'
+        + '<div class="st"><div class="sl">Attendees</div><div class="sv">' + (ev ? att.toLocaleString() : '--') + '</div></div>'
+        + '<div class="st ac"><div class="sl">Attendance Rate</div><div class="sv">' + (ev ? rate : '--') + '</div></div>'
+        + '<div class="st"><div class="sl">Apply Clicks</div><div class="sv">' + (ev ? clicks2.toLocaleString() : '--') + '</div></div>'
+        + '</div>'
+        + '<div class="lower">'
+        + '<div class="photos">' + (evImgHTML || '<div class="no-photo">No photos uploaded</div>') + '</div>'
+        + '<div class="note-col">'
+        + evNoteHTML
+        + (slideTag ? '<span class="tag">' + slideTag + '</span>' : '')
         + '</div>'
         + '</div>'
         + '</div>'
-        + '</div>';
+        + '</div></div></div>';
     }
 
-    // -- Data slide layout (default) ---------------------------
-    // Classify fields by visual treatment
+    // -- Data / Goals slide (default) -------------------------
     var STAT_TYPES = {number:1,currency:1,percent:1,hs_contracted:1,hs_payments:1,hs_deals:1,hs_avg_deal:1,hs_qoq:1,hs_yoy:1,ac_total:1,ac_total_jobs:1,ac_total_events:1,ev_registrations:1,ev_attendees:1,ev_attendance_rate:1,ev_clicks:1,ac_mandarin_events:1,ac_mandarin_regs:1,ac_mandarin_att:1,ac_mandarin_clients:1,ac_mandarin_cvs:1};
     var WIDE_TYPES  = {ac_top_companies:1,ac_top_companies_events:1,hs_top_clients:1,ac_events:1,hs_revenue_comparison:1};
     var sFields   = s.fields.filter(function(f){ return STAT_TYPES[f.type]; });
     var wFields   = s.fields.filter(function(f){ return WIDE_TYPES[f.type]; });
-    var imgFields = s.fields.filter(function(f){ return f.type === 'image'; });
     var tFields   = s.fields.filter(function(f){ return !STAT_TYPES[f.type] && !WIDE_TYPES[f.type] && f.type !== 'image'; });
+    var hasACFields = s.fields.some(function(f){ return f.type.startsWith('ac_'); });
 
-    // Stat card sizing — fewer cards = bigger numbers
-    var nStats  = sFields.length;
-    var sFontPx = nStats <= 2 ? 56 : nStats <= 4 ? 46 : nStats <= 6 ? 38 : 30;
-    var sCols   = Math.min(nStats, 4);
-    var cardBg  = t.slideBg === '#1a1a18' ? 'rgba(255,255,255,.07)' : t.slideBg === '#1db954' ? 'rgba(0,0,0,.14)' : '#F0F4F2';
-    var lBadge  = '<span style="font-size:8px;padding:1px 4px;border-radius:99px;background:rgba(29,185,84,.18);color:#1db954;font-weight:700;vertical-align:middle;margin-left:4px;">LIVE</span>';
+    // Identify key fields
+    var takeawayField = tFields.find(function(f){ return /takeaway|key insight|insight|conclusion/i.test(f.label); });
+    var allNoteFields = tFields.filter(function(f){ return f !== takeawayField; });
+    var clientField   = wFields.find(function(f){ return f.type === 'hs_top_clients' || f.type === 'ac_top_companies' || f.type === 'ac_top_companies_events'; });
+    var chartField    = wFields.find(function(f){ return f.type === 'hs_revenue_comparison'; });
+    var otherWide     = wFields.filter(function(f){ return f !== clientField && f !== chartField; });
 
-    // — Stat grid —
-    var statHTML = sFields.length ? '<div style="display:grid;grid-template-columns:repeat(' + sCols + ',1fr);gap:12px;margin-bottom:' + (tFields.length || wFields.length ? '16px' : '0') + ';">'
-      + sFields.map(function(f) {
+    // Auto H1 + H2
+    var h1Text = '', h2Text = '';
+    if (hasHSFields && live && live.hs) {
+      h1Text = esc(live.hs.quarter) + ' Revenue: ' + fmtUSD(live.hs.total_contracted_usd) + ' across ' + live.hs.deal_count + ' deals.';
+      if (live.hs.qoq_growth_pct != null) {
+        var qp = live.hs.qoq_growth_pct;
+        h2Text = esc((qp >= 0 ? '+' : '') + qp + '% QoQ') + (live.hs.qoq_label ? ' vs ' + esc(live.hs.qoq_label) : '');
+      }
+    }
+
+    // Takeaway value
+    var takeawayVal2 = takeawayField && e && e.data ? esc(e.data[takeawayField.id] || '') : '';
+
+    // ── GOALS layout (.dg): no live fields, ≤3 stat fields, no wide fields
+    var useGoalLayout = !hasHSFields && !hasACFields && sFields.length > 0 && sFields.length <= 3 && wFields.length === 0;
+    if (useGoalLayout) {
+      var threeHTML = '<div class="three">'
+        + sFields.slice(0,3).map(function(f, ci) {
+            var isLv = f.type.startsWith('hs_') || f.type.startsWith('ac_') || f.type.startsWith('ev_');
+            var raw = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+            var val = isLv ? resolveLiveField(f.type, live, snapshot, null, 3, null) : esc(raw || '--');
+            var tv = val && val !== '--' ? val.split(' ')[0] : '--';
+            var ts = val && val.indexOf(' ') > 0 ? val.substring(val.indexOf(' ') + 1) : '';
+            return '<div class="tc"><div class="tl">' + esc(f.label) + '</div>'
+              + '<div class="tv' + (ci === 0 ? ' g' : '') + '">' + tv + '</div>'
+              + (ts ? '<div class="ts">' + ts + '</div>' : '') + '</div>';
+          }).join('') + '</div>';
+
+      var dgCol1 = allNoteFields.length > 0 ? allNoteFields[0] : null;
+      var dgCol2Fields = allNoteFields.slice(dgCol1 ? 1 : 0).concat(otherWide);
+
+      var dgC1HTML = dgCol1 ? (function(){
+        var isLv = dgCol1.type.startsWith('hs_') || dgCol1.type.startsWith('ac_');
+        var raw = e && e.data && e.data[dgCol1.id] ? e.data[dgCol1.id] : '';
+        var val = isLv ? resolveLiveField(dgCol1.type, live, snapshot, null, null, null)
+                       : (dgCol1.type === 'text' ? escNL(raw || '') : esc(raw || ''));
+        return '<div class="col ac"><h3>' + esc(dgCol1.label) + '</h3><div class="txt">' + val + '</div></div>';
+      })() : '';
+      var dgC2HTML = dgCol2Fields.length > 0 ? '<div class="col"><h3>Background &amp; Targets</h3>'
+        + dgCol2Fields.map(function(f){
+            var isLv = f.type.startsWith('hs_') || f.type.startsWith('ac_');
+            var raw = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+            var val = isLv ? resolveLiveField(f.type, live, snapshot, null, null, null)
+                           : (f.type === 'text' ? escNL(raw || '') : esc(raw || ''));
+            if (!val || val === '--') return '';
+            return '<div class="f-row"><div class="f-lbl">' + esc(f.label) + '</div><div class="txt">' + val + '</div></div>';
+          }).join('') + '</div>' : '';
+
+      return '<div class="pres-slide-wrap"><div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '"><div class="pres-slide-inner">'
+        + '<div class="s-scaler s dg">' + MKG
+        + '<div class="snum">' + (i+1) + ' / ' + slides.length + '</div>'
+        + '<div class="pill">' + esc(s.title) + '</div>'
+        + '<h1>' + esc(s.title) + '</h1>'
+        + (h2Text ? '<h2>' + h2Text + '</h2>' : '')
+        + threeHTML
+        + '<div class="two">' + dgC1HTML + dgC2HTML + '</div>'
+        + (takeawayVal2 ? '<div class="tkwy">' + takeawayVal2 + '</div>' : '')
+        + '</div>'
+        + '</div></div></div>';
+    }
+
+    // ── DATA/REVENUE layout (.da) ─────────────────────────────
+    // Stat cards (up to 4)
+    var daStats = sFields.slice(0,4);
+    var daStatCols = Math.max(1, Math.min(4, daStats.length));
+    var daStatsHTML = daStats.length ? '<div class="stats" style="grid-template-columns:repeat(' + daStatCols + ',1fr);">'
+      + daStats.map(function(f, si) {
           var isLv = f.type.startsWith('hs_') || f.type.startsWith('ac_') || f.type.startsWith('ev_');
           var raw  = e && e.data && e.data[f.id] ? e.data[f.id] : '';
-          var val  = isLv ? resolveLiveField(f.type, live, snapshot, null, nStats, t) : esc(raw || '--');
-          // For stat cards show only the numeric/value token (strip verbose suffix)
-          var dispVal = (val && val !== '--') ? val.split(' ')[0] : val;
-          return '<div style="background:' + cardBg + ';border-radius:10px;padding:16px 20px;min-height:88px;display:flex;flex-direction:column;justify-content:space-between;">'
-            + '<div style="font-size:9px;font-weight:700;color:' + t.fieldLabel + ';letter-spacing:.08em;text-transform:uppercase;line-height:1.3;">' + esc(f.label) + (isLv ? lBadge : '') + '</div>'
-            + '<div style="font-size:' + sFontPx + 'px;font-weight:800;color:' + t.fieldValue + ';line-height:1;letter-spacing:-1.5px;margin-top:8px;">' + dispVal + '</div>'
+          var val  = isLv ? resolveLiveField(f.type, live, snapshot, null, daStats.length, null) : esc(raw || '--');
+          var sv = val && val !== '--' ? val.split(' ')[0] : '--';
+          var sd = val && val.indexOf(' ') > 0 ? val.substring(val.indexOf(' ') + 1) : '';
+          var isAccent = si === 0 && (f.type === 'hs_contracted' || f.type === 'ac_total' || f.type === 'currency');
+          return '<div class="sc' + (isAccent ? ' ac' : '') + '">'
+            + '<div class="sl">' + esc(f.label) + '</div>'
+            + '<div class="sv">' + sv + '</div>'
+            + (sd ? '<div class="sd">' + sd + '</div>' : '')
             + '</div>';
-        }).join('')
-      + '</div>' : '';
+        }).join('') + '</div>' : '';
 
-    // — Text / normal field grid (2 cols) —
-    var tCols    = tFields.length === 1 ? 1 : 2;
-    var textHTML = tFields.length ? '<div style="display:grid;grid-template-columns:repeat(' + tCols + ',1fr);gap:14px;margin-bottom:' + (wFields.length ? '16px' : '0') + ';">'
-      + tFields.map(function(f) {
-          var isLv  = f.type.startsWith('hs_') || f.type.startsWith('ac_') || f.type.startsWith('ev_');
-          var raw   = e && e.data && e.data[f.id] ? e.data[f.id] : '';
-          var fCtx  = (f.type.startsWith('ev_') && e && e.data) ? { _evName: e.data['_event_pick_' + f.id] || '' } : null;
-          var val   = isLv ? resolveLiveField(f.type, live, snapshot, fCtx, null, t)
-                    : (f.type === 'text' ? escNL(raw || '--') : esc(raw || '--'));
-          return '<div style="border-left:3px solid #1AA463;padding:2px 0 2px 14px;">'
-            + '<div style="font-size:9px;font-weight:700;color:' + t.fieldLabel + ';letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">' + esc(f.label) + (isLv ? lBadge : '') + '</div>'
-            + '<div style="font-size:16px;font-weight:600;color:' + t.fieldValue + ';line-height:1.45;">' + val + '</div>'
-            + '</div>';
-        }).join('')
-      + '</div>' : '';
+    // Clients column
+    var hasClients = !!clientField;
+    var col1HTML = '';
+    if (hasClients) {
+      var cContent = '';
+      if (clientField.type === 'hs_top_clients' && live && live.hs && live.hs.top_clients && live.hs.top_clients.length) {
+        cContent = '<ul class="pts">' + live.hs.top_clients.map(function(c){
+          return '<li>' + esc(c.name || c.deal_name || '') + ' — ' + fmtUSD(c.amount_usd) + '</li>';
+        }).join('') + '</ul>';
+      } else if ((clientField.type === 'ac_top_companies' || clientField.type === 'ac_top_companies_events') && live) {
+        var coArr = clientField.type === 'ac_top_companies' ? live.topCo : live.topCoEvents;
+        cContent = coArr && coArr.length
+          ? '<ul class="pts">' + coArr.map(function(c){ return '<li>' + esc(c[0]) + ' — ' + c[1].toLocaleString() + '</li>'; }).join('') + '</ul>'
+          : '<div class="txt" style="color:var(--mute);">No data yet</div>';
+      } else {
+        var isLvC = clientField.type.startsWith('hs_') || clientField.type.startsWith('ac_');
+        var rawC = e && e.data && e.data[clientField.id] ? e.data[clientField.id] : '';
+        cContent = isLvC ? resolveLiveField(clientField.type, live, snapshot, null, null, null) : esc(rawC || '--');
+      }
+      col1HTML = '<div class="col ac"><h3>' + esc(clientField.label) + '</h3>' + cContent + '</div>';
+    }
 
-    // — Wide fields: bar charts, ranked lists — full width —
-    var wideHTML = wFields.map(function(f) {
-        var isLv = f.type.startsWith('hs_') || f.type.startsWith('ac_');
-        var raw  = e && e.data && e.data[f.id] ? e.data[f.id] : '';
-        var val  = isLv ? resolveLiveField(f.type, live, snapshot, null, null, t) : esc(raw || '--');
-        return '<div style="margin-bottom:14px;">'
-          + '<div style="font-size:9px;font-weight:700;color:' + t.fieldLabel + ';letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;">' + esc(f.label) + lBadge + '</div>'
-          + val
-          + '</div>';
-      }).join('');
+    // Notes column
+    var noteItems = allNoteFields.concat(otherWide).map(function(f) {
+      var isLv = f.type.startsWith('hs_') || f.type.startsWith('ac_');
+      var raw  = e && e.data && e.data[f.id] ? e.data[f.id] : '';
+      var fCtx = (f.type.startsWith('ev_') && e && e.data) ? { _evName: e.data['_event_pick_' + f.id] || '' } : null;
+      var val  = isLv ? resolveLiveField(f.type, live, snapshot, fCtx, null, null)
+                      : (f.type === 'text' ? escNL(raw || '') : esc(raw || ''));
+      if (!val || val === '--') return '';
+      return '<div class="f-row"><div class="f-lbl">' + esc(f.label) + '</div><div class="txt">' + val + '</div></div>';
+    }).filter(Boolean);
+    var col2Content = noteItems.join('') || '<div class="txt" style="color:var(--mute);">No notes entered yet.</div>';
+    var col2HTML = '<div class="col"><h3>Notes</h3>' + col2Content + '</div>';
 
-    // — Image fields —
-    var imgHTML2 = imgFields.map(function(f) {
-        var raw = e && e.data && e.data[f.id] ? e.data[f.id] : '';
-        var urls2 = [];
-        try { var p2 = JSON.parse(raw || '[]'); urls2 = Array.isArray(p2) ? p2.filter(Boolean) : (p2 ? [p2] : []); } catch(er){ urls2 = raw ? [raw] : []; }
-        return urls2.length
-          ? '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;justify-content:center;">'
-            + urls2.map(function(url){ return url ? '<img src="' + url + '" style="max-height:240px;max-width:' + (urls2.length === 1 ? '100%' : 'calc(50% - 4px)') + ';border-radius:8px;object-fit:contain;flex:1;min-width:120px;display:block;margin:0 auto;" onerror="this.hidden=true">' : ''; }).join('')
-            + '</div>' : '';
-      }).join('');
+    // Chart column
+    var hasChart = !!(chartField && live && live.hs);
+    var col3HTML = '';
+    if (hasChart) {
+      var hs2 = live.hs;
+      var barsData = [
+        { lbl: hs2.quarter     || 'Current',      sub: 'Current',       val: hs2.total_contracted_usd || 0, g: true  },
+        { lbl: hs2.qoq_label   || 'Prior quarter', sub: 'Prior quarter', val: hs2.qoq_total            || 0, g: false },
+        { lbl: hs2.yoy_label   || 'Year ago',      sub: 'Year ago',      val: hs2.yoy_total            || 0, g: false }
+      ];
+      var maxBar = Math.max.apply(null, barsData.map(function(d){ return d.val; })) || 1;
+      col3HTML = '<div class="col"><div class="chart-wrap"><h3>Revenue Comparison</h3><div class="bars">'
+        + barsData.map(function(d) {
+            var pct = Math.round(d.val / maxBar * 100);
+            var h   = d.val === 0 ? '4px' : (pct * 1.1) + 'px';
+            var bg  = d.g ? '#1AA463' : (d.val === 0 ? '#E1E7E4' : '#BFE3CE');
+            return '<div class="bar-item">'
+              + '<div class="bar-val' + (d.g ? ' g' : '') + '">' + fmtUSD(d.val) + '</div>'
+              + '<div class="bar-track"><div class="bar-fill" style="height:' + h + ';background:' + bg + ';min-height:4px;"></div></div>'
+              + '<div class="bar-lbl">' + esc(d.lbl) + '</div>'
+              + '<div class="bar-sub">' + d.sub + '</div>'
+              + '</div>';
+          }).join('')
+        + '</div></div></div>';
+    }
 
-    // — Bottom bar: meta + disclaimer —
-    var bottomBar = '<div style="margin-top:auto;display:flex;align-items:baseline;justify-content:space-between;padding-top:6px;flex-shrink:0;">'
-      + (e ? '<div style="font-size:9px;color:' + t.meta + ';font-family:monospace;">' + (e.period ? 'Period: ' + esc(e.period) + ' · ' : '') + 'Updated ' + fmtTs(e.ts || e.created_at) + ' · ' + esc(e.by) + '</div>' : '<div></div>')
-      + '<div style="font-size:9px;color:' + t.disclaimer + ';">Designed by Myra via Claude AI</div>'
+    // Assemble main grid
+    var colCount = (hasClients ? 1 : 0) + 1 + (hasChart ? 1 : 0);
+    var daMainHTML = '<div class="main cols' + colCount + '">'
+      + (hasClients ? col1HTML : '') + col2HTML + (hasChart ? col3HTML : '')
       + '</div>';
 
-    return '<div class="pres-slide-wrap"><div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '" style="background:' + t.slideBg + ';border-color:' + t.border + ';">'
-      + '<div class="pres-slide-inner">'
-      + '<div class="pres-slide-head" style="background:' + t.headerBg + ';">'
-      + '<div class="pres-slide-num" style="color:' + t.meta + '">Slide ' + (i+1) + ' of ' + slides.length + (periodLabel && hasLiveFields ? ' · ' + esc(periodLabel) : '') + '</div>'
-      + '<div class="pres-slide-title" style="color:' + t.headerText + '">' + esc(s.title) + '</div>'
+    return '<div class="pres-slide-wrap"><div class="pres-slide" data-has-hs="' + (hasHSFields ? '1' : '0') + '"><div class="pres-slide-inner">'
+      + '<div class="s-scaler s da">' + MKG
+      + '<div class="snum">' + (i+1) + ' / ' + slides.length + (periodLabel && hasLiveFields ? ' · ' + esc(periodLabel) : '') + '</div>'
+      + '<div class="pill">' + esc(s.title) + '</div>'
+      + (h1Text ? '<h1>' + h1Text + '</h1>' : '')
+      + (h2Text ? '<h2>' + h2Text + '</h2>' : '')
+      + daStatsHTML
+      + daMainHTML
+      + (takeawayVal2 ? '<div class="tkwy">' + takeawayVal2 + '</div>' : '')
       + '</div>'
-      + '<div class="pres-slide-body">'
-      + imgHTML2
-      + statHTML
-      + textHTML
-      + wideHTML
-      + (!e && !hasLiveFields ? '<div style="font-size:14px;color:' + t.fieldLabel + ';font-style:italic;padding:1rem 0;">No data entered yet.</div>' : '')
-      + bottomBar
-      + '</div>'
-      + '</div>'
-      + '</div>'
-      + '</div>';
+      + '</div></div></div>';
   }).join('');
 }
 
@@ -2941,6 +3130,14 @@ async function loadAndRenderPres() {
 // ─── Auto-fit font sizes to fill slide ───────────────────────
 function autoFitSlides() {
   document.querySelectorAll('.pres-slide').forEach(function(slide) {
+    // New-design slides: just scale the fixed 1280×720 div to fit
+    var scaler = slide.querySelector('.s-scaler');
+    if (scaler) {
+      var containerW = (slide.querySelector('.pres-slide-inner') || slide).offsetWidth || 1280;
+      scaler.style.transform = 'scale(' + (containerW / 1280) + ')';
+      return;
+    }
+
     var body = slide.querySelector('.pres-col-wrap, .pres-slide-body');
     if (!body) return;
 
@@ -3070,29 +3267,40 @@ async function exportHTML() {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>OGSM Presentation · Cake Indonesia</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'DM Sans',sans-serif;background:#f5f5f3;padding:2.5rem 1.5rem;color:#0f0f0f;-webkit-font-smoothing:antialiased}
-.cover{max-width:720px;margin:0 auto 2rem;background:#1db954;border-radius:16px;padding:2.5rem}
-.cover-label{font-size:11px;color:rgba(255,255,255,.7);letter-spacing:.07em;text-transform:uppercase;margin-bottom:8px}
-.cover h1{font-size:28px;font-weight:700;color:#fff;margin-bottom:4px}
-.cover p{font-size:14px;color:rgba(255,255,255,.8)}
-.pres-slide{max-width:100%;width:100%;margin:0 0 1.5rem;background:#fff;border:1px solid #e5e5e3;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06)}
-.pres-slide-head{background:#1db954;padding:.4rem 1.5rem}
-.pres-slide-num{font-size:9px;color:rgba(255,255,255,.5);letter-spacing:.05em}
-.pres-slide-title{font-size:18px;font-weight:700;color:#fff}
-.pres-slide-body{padding:1.1rem 1.5rem 1rem;display:flex;flex-direction:column}
-.pres-pfield{padding:10px 0;border-bottom:1px solid #f0f0ee}
-.pres-pfield:last-child{border-bottom:none;padding-bottom:0}
-.pres-pfield-label{font-size:10px;color:#888;margin-bottom:3px;letter-spacing:.05em;text-transform:uppercase;font-weight:700}
-.pres-pfield-value{font-size:15px;font-weight:500;color:#0f0f0f}
-.pres-pfield-empty{font-size:13px;color:#bbb;font-style:italic}
-.pres-slide-meta{font-size:9px;color:#aaa;margin-top:8px;font-family:monospace}
-.footer{text-align:center;font-size:11px;color:#aaa;max-width:720px;margin:0 auto;padding:1rem 0 2rem}
+html,body{background:#111;font-family:'Inter',-apple-system,sans-serif;-webkit-font-smoothing:antialiased;padding:3rem 2rem}
+.cover{max-width:1280px;margin:0 auto 2rem;background:#0F3B2E;border-radius:12px;padding:2rem 2.5rem}
+.cover-label{font-size:11px;color:rgba(255,255,255,.55);letter-spacing:.07em;text-transform:uppercase;margin-bottom:8px}
+.cover h1{font-size:28px;font-weight:800;color:#fff;margin-bottom:4px;letter-spacing:-.5px}
+.cover p{font-size:14px;color:rgba(255,255,255,.7)}
+.pres-slide-wrap{max-width:1280px;margin:0 auto 3rem;}
+.pres-slide{width:100%;height:0;padding-bottom:56.25%;position:relative;border-radius:8px;overflow:hidden;box-shadow:0 20px 80px rgba(0,0,0,.6);}
+.pres-slide-inner{position:absolute;inset:0;}
+.s-scaler{position:absolute;top:0;left:0;width:1280px;height:720px;transform-origin:top left;}
+.s{--ink:#1F2A24;--body:#4A5550;--mute:#8A8A8A;--green:#1AA463;--gd:#0F7A47;--gs:#E8F5EE;--dark:#0F3B2E;--line:#E5E7EB;--sc:#F7F9F8;--cb:#E1E7E4;width:1280px;height:720px;background:#fff;position:relative;overflow:hidden;font-family:'Inter',-apple-system,sans-serif;-webkit-font-smoothing:antialiased;}
+.s .mk{position:absolute;top:32px;right:40px;z-index:10;}.s .mk svg{display:block;height:22px;width:auto;}
+.s .snum{position:absolute;top:22px;left:28px;font-size:10px;font-weight:700;color:var(--mute);letter-spacing:2px;}
+.s .pill{display:inline-flex;align-items:center;padding:5px 12px 5px 16px;font-size:14px;font-weight:700;color:var(--ink);border-left:5px solid var(--green);margin-bottom:14px;}
+.s .tkwy{position:absolute;left:72px;right:72px;bottom:40px;background:var(--gs);color:var(--gd);padding:12px 20px;font-weight:700;font-size:14px;border-radius:4px;}
+.tb{background:#fff;display:flex;padding:0;}.tb .bar{width:8px;background:var(--green);flex-shrink:0;}.tb .body{flex:1;display:flex;flex-direction:column;justify-content:center;padding:64px 88px;position:relative;}.tb .ey{font-size:11px;font-weight:800;color:var(--gd);letter-spacing:4px;text-transform:uppercase;margin-bottom:18px;}.tb .ht{font-size:64px;font-weight:900;color:var(--ink);letter-spacing:-2.5px;line-height:1.05;margin:0 0 20px;}.tb .hs{font-size:22px;font-weight:400;color:var(--body);max-width:700px;line-height:1.5;}.tb .tags{display:flex;gap:8px;margin-top:28px;flex-wrap:wrap;}.tb .tags .t{background:var(--gs);color:var(--gd);padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;}.tb .rm{position:absolute;bottom:40px;right:80px;font-size:200px;font-weight:900;color:rgba(26,164,99,.06);line-height:1;letter-spacing:-6px;user-select:none;}
+.da{padding:48px 72px 100px;}.da h1{font-size:36px;font-weight:800;line-height:1.15;color:var(--ink);margin:0 0 6px;letter-spacing:-1.2px;}.da h2{font-size:15px;font-weight:500;line-height:1.4;color:var(--body);margin:0 0 14px;}.da .stats{display:grid;gap:11px;margin-bottom:14px;}.da .sc{background:var(--sc);border:1px solid var(--cb);border-radius:10px;padding:14px 16px;}.da .sc.ac{background:var(--gs);border-color:#BFE3CE;}.da .sc .sl{font-size:9px;font-weight:800;color:var(--mute);letter-spacing:2px;text-transform:uppercase;margin-bottom:7px;}.da .sc.ac .sl{color:var(--gd);}.da .sc .sv{font-size:28px;font-weight:900;color:var(--ink);letter-spacing:-1.5px;line-height:1;}.da .sc.ac .sv{color:var(--gd);}.da .sc .sd{font-size:10px;color:var(--body);margin-top:3px;}.da .main{display:grid;gap:14px;}.da .main.cols1{grid-template-columns:1fr;}.da .main.cols2{grid-template-columns:1fr 1fr;}.da .main.cols3{grid-template-columns:1fr 1fr 1fr;}.da .col{background:var(--sc);border:1px solid var(--cb);border-radius:10px;padding:16px 18px;overflow:hidden;}.da .col.ac{background:var(--gs);border-color:#BFE3CE;}.da .col h3{font-size:9px;font-weight:800;color:var(--mute);letter-spacing:2px;text-transform:uppercase;margin:0 0 10px;}.da .col.ac h3{color:var(--gd);}.da .pts{list-style:none;padding:0;margin:0;}.da .pts li{font-size:12px;color:var(--ink);line-height:1.5;padding:4px 0 4px 15px;border-top:1px dashed var(--cb);position:relative;font-weight:500;}.da .pts li:first-child{border-top:none;}.da .pts li::before{content:"";position:absolute;left:0;top:12px;width:5px;height:5px;border-radius:50%;background:var(--green);}.da .txt{font-size:12px;color:var(--body);line-height:1.6;}.da .f-row{margin-bottom:8px;}.da .f-lbl{font-size:9px;font-weight:800;color:var(--mute);letter-spacing:2px;text-transform:uppercase;margin-bottom:3px;}.da .chart-wrap{display:flex;flex-direction:column;height:100%;}.da .chart-wrap h3{font-size:9px;font-weight:800;color:var(--mute);letter-spacing:2px;text-transform:uppercase;margin:0 0 10px;}.da .bars{display:flex;align-items:flex-end;gap:16px;flex:1;padding-bottom:4px;}.da .bar-item{display:flex;flex-direction:column;align-items:center;flex:1;}.da .bar-track{width:100%;display:flex;flex-direction:column;justify-content:flex-end;height:110px;}.da .bar-fill{width:100%;border-radius:4px 4px 0 0;}.da .bar-val{font-size:12px;font-weight:800;color:var(--ink);margin-bottom:4px;text-align:center;letter-spacing:-.5px;}.da .bar-val.g{color:var(--gd);}.da .bar-lbl{font-size:9px;font-weight:700;color:var(--mute);text-align:center;margin-top:6px;letter-spacing:.5px;}.da .bar-sub{font-size:9px;color:var(--body);text-align:center;margin-top:2px;}
+.dg{padding:46px 72px 100px;}.dg h1{font-size:32px;font-weight:800;line-height:1.2;color:var(--ink);margin:0 0 6px;letter-spacing:-1.2px;}.dg h2{font-size:15px;font-weight:500;color:var(--body);margin:0 0 14px;line-height:1.4;}.dg .three{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;}.dg .tc{background:var(--sc);border:1px solid var(--cb);border-radius:10px;padding:16px 18px;}.dg .tc .tl{font-size:9px;font-weight:800;color:var(--mute);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;line-height:1.35;}.dg .tc .tv{font-size:36px;font-weight:900;color:var(--ink);letter-spacing:-1.5px;line-height:1;}.dg .tc .tv.g{color:var(--gd);}.dg .tc .ts{font-size:11px;color:var(--body);margin-top:4px;line-height:1.3;}.dg .two{display:grid;grid-template-columns:1fr 1fr;gap:14px;}.dg .col{background:var(--sc);border:1px solid var(--cb);border-radius:10px;padding:16px 18px;overflow:hidden;}.dg .col.ac{background:var(--gs);border-color:#BFE3CE;}.dg .col h3{font-size:9px;font-weight:800;color:var(--mute);letter-spacing:2px;text-transform:uppercase;margin:0 0 10px;}.dg .col.ac h3{color:var(--gd);}.dg .pts{list-style:none;padding:0;margin:0;}.dg .pts li{font-size:12px;color:var(--ink);line-height:1.5;padding:4px 0 4px 15px;border-top:1px dashed var(--cb);position:relative;font-weight:500;}.dg .pts li:first-child{border-top:none;}.dg .pts li::before{content:"";position:absolute;left:0;top:12px;width:5px;height:5px;border-radius:50%;background:var(--green);}.dg .txt{font-size:12px;color:var(--body);line-height:1.6;}
+.eb{padding:0;display:flex;flex-direction:column;}.eb .hd{background:var(--dark);padding:22px 48px 18px;position:relative;overflow:hidden;flex-shrink:0;}.eb .hd svg.bg{position:absolute;inset:0;width:100%;height:100%;}.eb .hd .sn{position:relative;z-index:1;font-size:10px;color:rgba(255,255,255,.4);letter-spacing:2px;margin-bottom:6px;}.eb .hd .ht{position:relative;z-index:1;font-size:28px;font-weight:900;color:#fff;letter-spacing:-.8px;line-height:1.15;margin-bottom:3px;}.eb .hd .sub{position:relative;z-index:1;font-size:12px;color:rgba(255,255,255,.62);line-height:1.3;}.eb .strip{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--line);flex-shrink:0;}.eb .st{padding:14px 24px;border-right:1px solid var(--line);}.eb .st:last-child{border-right:none;}.eb .st.ac{background:var(--gs);}.eb .st .sl{font-size:9px;font-weight:800;color:var(--mute);letter-spacing:2px;text-transform:uppercase;margin-bottom:7px;}.eb .st.ac .sl{color:var(--gd);}.eb .st .sv{font-size:34px;font-weight:900;color:var(--ink);letter-spacing:-1.5px;line-height:1;}.eb .st.ac .sv{color:var(--gd);}.eb .st .sd{font-size:10px;color:var(--body);margin-top:3px;}.eb .lower{flex:1;display:flex;min-height:0;}.eb .photos{flex:1;padding:14px 14px 14px 48px;display:flex;gap:10px;align-items:center;}.eb .photos img{border-radius:6px;object-fit:cover;flex:1;min-width:0;height:185px;width:100%;}.eb .note-col{width:300px;flex-shrink:0;padding:14px 48px 14px 16px;display:flex;flex-direction:column;justify-content:center;gap:12px;border-left:1px solid var(--line);}.eb .note-col .nl{font-size:9px;font-weight:800;color:var(--gd);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;}.eb .note-col .nv{font-size:12px;color:var(--ink);font-weight:500;line-height:1.55;}.eb .note-col .tag{display:inline-flex;align-items:center;background:var(--gs);color:var(--gd);padding:4px 12px;border-radius:3px;font-size:11px;font-weight:700;letter-spacing:1px;}
+.footer{text-align:center;font-size:11px;color:#555;max-width:1280px;margin:0 auto;padding:2rem 0;}
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <symbol id="ck" viewBox="0 0 112 32">
+    <path d="M32 13.2838V32C21.3333 30.861 10.6667 29.7181 0 28.5752V9.87429C0 9.87429 0 9.87048 0.00380952 9.86667C1.82476 5.77524 6.84571 2.26667 13.7181 0L32 13.2838Z" fill="#13AB67"/>
+    <path d="M58.4039 20.6095L61.1258 23.3314C59.2515 25.2057 56.6553 26.3676 53.7944 26.3676C48.0687 26.3676 43.4268 21.7257 43.4268 15.9999C43.4268 10.2742 48.0687 5.63232 53.7944 5.63232C56.6553 5.63232 59.2496 6.79423 61.1258 8.66851L58.4039 11.3904C57.2249 10.2114 55.5963 9.48375 53.7944 9.48375C50.1963 9.48375 47.2782 12.4018 47.2782 15.9999C47.2782 19.598 50.1963 22.5161 53.7944 22.5161C55.5944 22.5161 57.2249 21.7866 58.4039 20.6095Z" fill="#13AB67"/>
+    <path d="M74.5296 11.5561V12.7999C73.3182 11.6533 71.6953 10.9637 69.7906 10.9637C65.5372 10.9637 62.0896 14.4114 62.0896 18.6647C62.0896 22.918 65.5372 26.3656 69.7906 26.3656C71.6953 26.3656 73.3182 25.6761 74.5296 24.5295V25.7733H78.0839V11.5561H74.5296ZM69.7906 22.8133C67.501 22.8133 65.6439 20.9599 65.6439 18.6666C65.6439 16.3733 67.501 14.5199 69.7906 14.5199C72.0801 14.5199 73.9372 16.3771 73.9372 18.6666C73.9372 20.9561 72.0801 22.8133 69.7906 22.8133Z" fill="#13AB67"/>
+    <path d="M111.851 20.1466C111.949 19.6723 112 19.1752 112 18.6647C112 14.4114 108.92 10.9637 104.151 10.9637C99.381 10.9637 96.301 14.4114 96.301 18.6647C96.301 22.918 99.8172 26.3656 104.151 26.3656C106.973 26.3656 109.493 25.5333 111.151 23.8856L108.749 21.4837C107.827 22.4666 106.29 23.0323 104.152 23.0323C102.015 23.0323 100.61 21.8304 100.13 20.1447H111.853L111.851 20.1466ZM104.151 14.2971C106.345 14.2971 107.693 15.5028 108.173 17.1847H100.128C100.608 15.5028 101.958 14.2971 104.151 14.2971Z" fill="#13AB67"/>
+    <path d="M96.4134 25.7752H91.4096L85.1925 19.558V25.7752H81.6382V5.64185C82.8229 5.76946 84.0077 5.89327 85.1925 6.02089V17.1885L90.8229 11.558H95.8268L89.0115 18.3733L96.4134 25.7752Z" fill="#13AB67"/>
+  </symbol>
+</svg>
 <div class="cover">
   <div class="cover-label">Cake Indonesia · Business Team</div>
   <h1>OGSM Presentation</h1>
@@ -3100,6 +3308,15 @@ body{font-family:'DM Sans',sans-serif;background:#f5f5f3;padding:2.5rem 1.5rem;c
 </div>
 ${slideHTML}
 <div class="footer">Generated by Cake OGSM Platform · ${new Date().getFullYear()}</div>
+<script>
+document.querySelectorAll('.pres-slide').forEach(function(slide){
+  var scaler=slide.querySelector('.s-scaler');
+  if(!scaler) return;
+  var inner=slide.querySelector('.pres-slide-inner')||slide;
+  var w=inner.offsetWidth||1280;
+  scaler.style.transform='scale('+(w/1280)+')';
+});
+<\/script>
 </body></html>`;
 
   const a = document.createElement('a');
